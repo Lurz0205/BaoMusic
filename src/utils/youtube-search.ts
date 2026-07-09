@@ -17,6 +17,10 @@ export interface YouTubeSearchResult {
 const ROOT_DIR = process.cwd();
 const YTDLP_PATH = path.join(ROOT_DIR, 'bin', 'yt-dlp');
 
+// Hardcoded PO Token & Visitor Data for fallback/default usage
+const DEFAULT_PO_TOKEN = 'MlWhNcrk5yPATaELnTfvHxmyJKakOlVFwds0rub0sf7WS0SCCaIK9dL';
+const DEFAULT_VISITOR_DATA = 'CgtQSEdTMU5EWEt2VSjt58DSBjIKCgJWThIEGgAgEmLfAgrcAjE5LllUPU5kSGFaU3M3VmdhT243NnIzdFk2aW1kNHB6aWdCTFpueVJ6NkkyMnpDUmFrQ0xfdGlRUk0zTWJiNEFVem1xNk1wS1A2d3BLMGVTQnJjREtmZlVxMEJHY0N3WWMwU0NnYWw0MVJUUkJERW9wVXpQRFBONV93aHZ3Wl9kdDgxWndSZUEzWUt3UzIybWRWbjFWVEtIYXpCazMzNTZhelhyUklMakU2Mmx2aU5UR3VYWVI2cFFaYXM2OHJyeW1wOTJOcTNzTVBXekdBaHg2eVJkYWh4UnQ5bHN5d3MzNGlwR0RZRXVtaHFxcXlwVnFyQU83Q1dHMFRJeFBISXNQUGNXWHNLOG5QSS10SjR5dE5nWTBIWDh3aVBkVGVjbGNVazNKMXQ5bFZPa05fS3AzYWlFOTdULVNlYUNFR3d4dlNUbU5rUHphUGhEdDRCQkJfS1FKOGpGbE16UQ';
+
 function formatDuration(durationSec: number): string {
   if (isNaN(durationSec) || durationSec <= 0) return '0:00';
   const hours = Math.floor(durationSec / 3600);
@@ -72,8 +76,8 @@ export async function searchYouTube(query: string, limit: number = 5): Promise<Y
     }
 
     // Pass PO Token if configured
-    const poToken = process.env.YT_PO_TOKEN;
-    const visitorData = process.env.YT_VISITOR_DATA;
+    const poToken = process.env.YT_PO_TOKEN || DEFAULT_PO_TOKEN;
+    const visitorData = process.env.YT_VISITOR_DATA || DEFAULT_VISITOR_DATA;
     if (poToken) {
       const val = visitorData ? `${poToken}~${visitorData}` : poToken;
       args.push('--extractor-args', `youtube:po_token=${val}`);
@@ -142,8 +146,8 @@ export async function ytDlpGetMetadata(url: string): Promise<YouTubeSearchResult
     }
 
     // Pass PO Token if configured
-    const poToken = process.env.YT_PO_TOKEN;
-    const visitorData = process.env.YT_VISITOR_DATA;
+    const poToken = process.env.YT_PO_TOKEN || DEFAULT_PO_TOKEN;
+    const visitorData = process.env.YT_VISITOR_DATA || DEFAULT_VISITOR_DATA;
     if (poToken) {
       const val = visitorData ? `${poToken}~${visitorData}` : poToken;
       args.push('--extractor-args', `youtube:po_token=${val}`);
@@ -212,8 +216,8 @@ export function spawnYtDlpStream(url: string): Readable {
   }
 
   // Pass PO Token if configured
-  const poToken = process.env.YT_PO_TOKEN;
-  const visitorData = process.env.YT_VISITOR_DATA;
+  const poToken = process.env.YT_PO_TOKEN || DEFAULT_PO_TOKEN;
+  const visitorData = process.env.YT_VISITOR_DATA || DEFAULT_VISITOR_DATA;
   if (poToken) {
     const val = visitorData ? `${poToken}~${visitorData}` : poToken;
     args.push('--extractor-args', `youtube:po_token=${val}`);
