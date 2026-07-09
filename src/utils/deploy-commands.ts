@@ -29,7 +29,13 @@ export async function deploySlashCommands(): Promise<{ success: boolean; message
     logger.success(msg);
     return { success: true, message: msg };
   } catch (err: any) {
-    const errorMsg = `Lỗi đăng ký slash commands: ${err.message || err}`;
+    let errorMsg = `Lỗi đăng ký slash commands: ${err.message || err}`;
+    
+    // Check for Discord API code 10002 (Unknown Application)
+    if (err.code === 10002 || (err.message && err.message.includes('Unknown Application'))) {
+      errorMsg = `Lỗi đăng ký slash commands: Unknown Application (Lỗi 10002). Lỗi này 100% xảy ra do CLIENT_ID (${config.clientId}) và BOT_TOKEN hiện tại không khớp với nhau hoặc CLIENT_ID của bạn bị nhập sai. Vui lòng kiểm tra lại cả hai biến môi trường BOT_TOKEN và CLIENT_ID trong cấu hình Render của bạn để đảm bảo chúng thuộc về cùng một ứng dụng Bot trên Discord Developer Portal!`;
+    }
+    
     logger.error(errorMsg, err);
     return { success: false, message: errorMsg };
   }

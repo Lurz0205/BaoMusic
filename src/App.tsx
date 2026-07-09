@@ -300,7 +300,7 @@ export default function App() {
             )}
 
             {/* Quick action system buttons if configured */}
-            {config?.isConfigured && status?.online && (
+            {config?.isConfigured && (
               <div className="flex flex-wrap gap-4 items-center bg-white p-5 rounded-2xl border border-slate-200/70 shadow-sm">
                 <div className="text-sm font-semibold text-slate-700 mr-2">Thao tác nhanh:</div>
                 <button
