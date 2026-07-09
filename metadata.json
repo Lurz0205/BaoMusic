@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Discord Music Bot Dashboard",
+  "description": "A highly-optimized, full-stack Discord Music Bot with a premium Web Control Panel, supporting YouTube, Spotify, and SoundCloud streaming, custom cookie.txt uploads, and Slash Command Autocomplete.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
