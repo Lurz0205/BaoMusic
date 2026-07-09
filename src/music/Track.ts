@@ -2,6 +2,7 @@ import play from 'play-dl';
 import { createAudioResource, AudioResource } from '@discordjs/voice';
 import { TrackData } from '../types.js';
 import { logger } from '../utils/logger.js';
+import { YouTube } from 'youtube-sr';
 
 export class Track implements TrackData {
   public readonly title: string;
@@ -36,10 +37,28 @@ export class Track implements TrackData {
       // Handle Spotify tracks: search and get equivalent YouTube URL
       if (this.source === 'spotify') {
         logger.info(`Searching YouTube equivalent for Spotify track: "${this.title}"...`);
-        const searchResults = await play.search(this.title, { limit: 1 });
-        if (searchResults && searchResults.length > 0) {
-          finalUrl = searchResults[0].url;
-          logger.info(`Found YouTube equivalent for Spotify: "${searchResults[0].title}" (${finalUrl})`);
+        let youtubeUrl: string | null = null;
+        try {
+          const searchResults = await play.search(this.title, { limit: 1 });
+          if (searchResults && searchResults.length > 0) {
+            youtubeUrl = searchResults[0].url;
+            logger.info(`Found YouTube equivalent for Spotify (via play-dl): "${searchResults[0].title}" (${youtubeUrl})`);
+          }
+        } catch (err) {
+          logger.warn(`play-dl search failed for Spotify conversion, falling back to youtube-sr...`, err);
+          try {
+            const video = await YouTube.searchOne(this.title);
+            if (video) {
+              youtubeUrl = video.url;
+              logger.info(`Found YouTube equivalent for Spotify (via youtube-sr): "${video.title}" (${youtubeUrl})`);
+            }
+          } catch (subErr) {
+            logger.error(`youtube-sr search also failed for Spotify conversion:`, subErr);
+          }
+        }
+
+        if (youtubeUrl) {
+          finalUrl = youtubeUrl;
         } else {
           throw new Error(`Could not find a YouTube equivalent for Spotify track: "${this.title}"`);
         }
@@ -182,18 +201,38 @@ export class Track implements TrackData {
 
     // 3. Search query (fallback)
     logger.info(`Searching YouTube for query: "${cleanInput}"...`);
-    const searchResults = await play.search(cleanInput, { limit: 1 });
-    if (searchResults && searchResults.length > 0) {
-      const v = searchResults[0];
-      return [new Track({
-        title: v.title || 'Unknown YouTube Video',
-        url: v.url,
-        thumbnail: v.thumbnails[0]?.url || '',
-        duration: v.durationInSec,
-        durationString: v.durationRaw || '0:00',
-        requestedBy,
-        source: 'youtube'
-      })];
+    try {
+      const searchResults = await play.search(cleanInput, { limit: 1 });
+      if (searchResults && searchResults.length > 0) {
+        const v = searchResults[0];
+        return [new Track({
+          title: v.title || 'Unknown YouTube Video',
+          url: v.url,
+          thumbnail: v.thumbnails[0]?.url || '',
+          duration: v.durationInSec,
+          durationString: v.durationRaw || '0:00',
+          requestedBy,
+          source: 'youtube'
+        })];
+      }
+    } catch (err) {
+      logger.warn(`play-dl search failed, falling back to youtube-sr search...`, err);
+      try {
+        const video = await YouTube.searchOne(cleanInput);
+        if (video) {
+          return [new Track({
+            title: video.title || 'Unknown YouTube Video',
+            url: video.url,
+            thumbnail: video.thumbnail?.url || '',
+            duration: Math.floor(video.duration / 1000),
+            durationString: video.durationFormatted || '0:00',
+            requestedBy,
+            source: 'youtube'
+          })];
+        }
+      } catch (subErr) {
+        logger.error(`Both play-dl and youtube-sr searches failed:`, subErr);
+      }
     }
 
     throw new Error('No tracks or search results found for the input provided.');

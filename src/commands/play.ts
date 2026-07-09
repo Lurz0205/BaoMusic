@@ -10,6 +10,7 @@ import play from 'play-dl';
 import { playerManager } from '../music/PlayerManager.js';
 import { Track } from '../music/Track.js';
 import { logger } from '../utils/logger.js';
+import { YouTube } from 'youtube-sr';
 
 export const playCommand = {
   data: new SlashCommandBuilder()
@@ -35,7 +36,22 @@ export const playCommand = {
 
     try {
       // Limit to 6 results for speedy retrieval
-      const results = await play.search(focusedValue, { limit: 6 });
+      let results: any[] = [];
+      try {
+        results = await play.search(focusedValue, { limit: 6 });
+      } catch (err) {
+        // Fallback to youtube-sr search
+        try {
+          const ytSrResults = await YouTube.search(focusedValue, { limit: 6 } as any);
+          results = ytSrResults.map(v => ({
+            title: v.title,
+            url: v.url,
+            durationRaw: v.durationFormatted
+          }));
+        } catch (subErr) {
+          logger.error('Autocomplete search fallback failed:', subErr);
+        }
+      }
       
       const choices = results.map((video) => {
         const title = video.title || 'Unknown Title';

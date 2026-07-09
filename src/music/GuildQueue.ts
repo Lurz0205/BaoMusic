@@ -13,6 +13,7 @@ import play from 'play-dl';
 import { Track } from './Track.js';
 import { QueueState } from '../types.js';
 import { logger } from '../utils/logger.js';
+import { YouTube } from 'youtube-sr';
 
 export class GuildQueue {
   public readonly guildId: string;
@@ -234,8 +235,26 @@ export class GuildQueue {
       logger.music(`Autoplay active: searching recommendations based on "${lastTrack.title}"...`, 'autoplay');
       
       // play-dl search for related content
-      const searchResult = await play.search(lastTrack.title, { limit: 5 });
-      const related = searchResult.filter(v => v.url !== lastTrack.url && v.durationInSec > 30);
+      let searchResult: any[] = [];
+      try {
+        searchResult = await play.search(lastTrack.title, { limit: 5 });
+      } catch (err) {
+        logger.warn(`play-dl search failed in autoplay, falling back to youtube-sr...`, err);
+        try {
+          const ytSrResults = await YouTube.search(lastTrack.title, { limit: 5 } as any);
+          searchResult = ytSrResults.map(v => ({
+            title: v.title,
+            url: v.url,
+            thumbnails: v.thumbnail ? [{ url: v.thumbnail.url }] : [],
+            durationInSec: Math.floor(v.duration / 1000),
+            durationRaw: v.durationFormatted
+          }));
+        } catch (subErr) {
+          logger.error(`youtube-sr search also failed in autoplay:`, subErr);
+        }
+      }
+      
+      const related = searchResult.filter(v => v.url !== lastTrack.url && (v.durationInSec || 0) > 30);
       
       if (related && related.length > 0) {
         // Queue the first recommended video
