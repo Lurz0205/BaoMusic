@@ -1,5 +1,4 @@
 import play from 'play-dl';
-import ytdl from '@distube/ytdl-core';
 import fs from 'fs';
 import { config } from '../config/index.js';
 import { logger } from './logger.js';
@@ -96,31 +95,6 @@ export function cleanAndFormatCookie(raw: string): string {
   return content.replace(/[\x00-\x1F\x7F-\x9F]/g, '');
 }
 
-let cachedYtdlAgent: any = null;
-
-export function getYtdlAgent() {
-  if (cachedYtdlAgent) return cachedYtdlAgent;
-  try {
-    if (config.hasCookies) {
-      const cookiePath = config.absoluteCookiePath;
-      const cookieData = fs.readFileSync(cookiePath, 'utf8');
-      const cookiesArray = parseCookies(cookieData);
-      if (cookiesArray && cookiesArray.length > 0) {
-        cachedYtdlAgent = ytdl.createAgent(cookiesArray);
-        logger.success(`ytdl-core agent successfully initialized with ${cookiesArray.length} parsed cookies.`);
-      }
-    }
-  } catch (err) {
-    logger.error('Failed to initialize ytdl-core agent with cookies:', err);
-  }
-  
-  if (!cachedYtdlAgent) {
-    logger.info('Initializing ytdl-core with default agent.');
-    cachedYtdlAgent = ytdl.createAgent();
-  }
-  return cachedYtdlAgent;
-}
-
 export async function initPlayDL() {
   try {
     if (config.hasCookies) {
@@ -145,9 +119,6 @@ export async function initPlayDL() {
     } else {
       logger.info('No cookie file found. Play-DL will operate without cookies.');
     }
-    
-    // Also warm up/initialize ytdl-core agent
-    getYtdlAgent();
   } catch (err: any) {
     logger.error('Failed to initialize Play-DL with custom cookies:', err);
   }

@@ -1,10 +1,8 @@
 import play from 'play-dl';
-import { createAudioResource, AudioResource } from '@discordjs/voice';
+import { createAudioResource, AudioResource, StreamType } from '@discordjs/voice';
 import { TrackData } from '../types.js';
 import { logger } from '../utils/logger.js';
-import { YouTubeSearch } from '../utils/youtube-search.js';
-import ytdl from '@distube/ytdl-core';
-import { getYtdlAgent } from '../utils/playdl-init.js';
+import { YouTubeSearch, ytDlpGetMetadata, spawnYtDlpStream, searchYouTube } from '../utils/youtube-search.js';
 
 export class Track implements TrackData {
   public readonly title: string;
@@ -41,22 +39,13 @@ export class Track implements TrackData {
         logger.info(`Searching YouTube equivalent for Spotify track: "${this.title}"...`);
         let youtubeUrl: string | null = null;
         try {
-          const searchResults = await play.search(this.title, { limit: 1 });
+          const searchResults = await YouTubeSearch.search(this.title, { limit: 1 });
           if (searchResults && searchResults.length > 0) {
             youtubeUrl = searchResults[0].url;
-            logger.info(`Found YouTube equivalent for Spotify (via play-dl): "${searchResults[0].title}" (${youtubeUrl})`);
+            logger.info(`Found YouTube equivalent for Spotify: "${searchResults[0].title}" (${youtubeUrl})`);
           }
-        } catch (err) {
-          logger.warn(`play-dl search failed for Spotify conversion, falling back to YouTubeSearch...`, err);
-          try {
-            const video = await YouTubeSearch.searchOne(this.title);
-            if (video) {
-              youtubeUrl = video.url;
-              logger.info(`Found YouTube equivalent for Spotify (via YouTubeSearch): "${video.title}" (${youtubeUrl})`);
-            }
-          } catch (subErr: any) {
-            logger.error(`YouTubeSearch search also failed for Spotify conversion:`, subErr.message || subErr);
-          }
+        } catch (err: any) {
+          logger.error(`YouTube search failed for Spotify conversion:`, err.message || err);
         }
 
         if (youtubeUrl) {
@@ -66,48 +55,15 @@ export class Track implements TrackData {
         }
       }
 
-      // Stream the audio from the finalized URL
-      let resource;
-      try {
-        logger.info(`Attempting to stream "${this.title}" using play-dl...`);
-        const streamInfo = await play.stream(finalUrl, {
-          quality: 2, // 2 = High quality audio stream
-          seek: 0,
-        });
+      // Stream the audio using yt-dlp (works for both YouTube, SoundCloud, etc.!)
+      logger.info(`Creating audio stream via yt-dlp for: "${this.title}" (${finalUrl})`);
+      const stream = spawnYtDlpStream(finalUrl);
 
-        resource = createAudioResource(streamInfo.stream, {
-          inputType: streamInfo.type,
-          metadata: this,
-          inlineVolume: true,
-        });
-      } catch (playDlError: any) {
-        logger.warn(`play-dl stream failed for "${this.title}": ${playDlError.message || playDlError}. Falling back to @distube/ytdl-core...`);
-        
-        try {
-          const agent = getYtdlAgent();
-          const ytdlStream = ytdl(finalUrl, {
-            filter: 'audioonly',
-            quality: 'highestaudio',
-            highWaterMark: 1 << 25, // 32MB buffer size for extremely smooth playback
-            agent,
-            requestOptions: {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept-Language': 'en-US,en;q=0.9',
-              }
-            }
-          });
-          
-          resource = createAudioResource(ytdlStream, {
-            metadata: this,
-            inlineVolume: true,
-          });
-          logger.success(`Successfully generated fallback stream with @distube/ytdl-core for "${this.title}"`);
-        } catch (ytdlError: any) {
-          logger.error(`Both play-dl and @distube/ytdl-core failed to stream "${this.title}":`, ytdlError.message || ytdlError);
-          throw ytdlError;
-        }
-      }
+      const resource = createAudioResource(stream, {
+        inputType: StreamType.Arbitrary,
+        metadata: this,
+        inlineVolume: true,
+      });
 
       return resource;
     } catch (err: any) {
@@ -143,208 +99,82 @@ export class Track implements TrackData {
     requestedBy: { username: string; avatarUrl?: string }
   ): Promise<Track[]> {
     const cleanInput = input.trim();
-    let type: any = false;
-    try {
-      type = await play.validate(cleanInput);
-    } catch (err: any) {
-      logger.warn(`play.validate failed for input "${cleanInput}", falling back:`, err.message || err);
-    }
 
-    // Fallback: If play-dl did not validate or failed, check if it's a valid YouTube URL via ytdl-core
-    if (!type && ytdl.validateURL(cleanInput)) {
+    // 1. Check if the input is a Spotify link
+    if (cleanInput.includes('spotify.com')) {
       try {
-        logger.info(`Validating YouTube URL using @distube/ytdl-core: "${cleanInput}"...`);
-        const agent = getYtdlAgent();
-        const info = await ytdl.getBasicInfo(cleanInput, {
-          agent,
-          requestOptions: {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Accept-Language': 'en-US,en;q=0.9',
-            }
-          }
-        });
-        const v = info.videoDetails;
-        const durationSec = parseInt(v.lengthSeconds || '0', 10);
-        return [new Track({
-          title: v.title || 'Unknown YouTube Video',
-          url: v.video_url,
-          thumbnail: v.thumbnails[0]?.url || '',
-          duration: durationSec,
-          durationString: new Date(durationSec * 1000).toISOString().substr(14, 5),
-          requestedBy,
-          source: 'youtube'
-        })];
-      } catch (ytdlErr: any) {
-        logger.warn(`@distube/ytdl-core URL parsing failed for "${cleanInput}":`, ytdlErr.message || ytdlErr);
+        const spotifyData = await play.spotify(cleanInput);
+        if (spotifyData.type === 'playlist' || spotifyData.type === 'album') {
+          const tracks = await (spotifyData as any).all_tracks();
+          return tracks.map((t: any) => new Track({
+            title: `${t.name} - ${t.artists.map((a: any) => a.name).join(', ')}`,
+            url: t.url,
+            thumbnail: '',
+            duration: t.durationInSec,
+            durationString: new Date(t.durationInSec * 1000).toISOString().substr(14, 5),
+            requestedBy,
+            source: 'spotify'
+          }));
+        } else if (spotifyData.type === 'track') {
+          const t = spotifyData as any;
+          return [new Track({
+            title: `${t.name} - ${t.artists.map((a: any) => a.name).join(', ')}`,
+            url: t.url,
+            thumbnail: t.thumbnail?.url || '',
+            duration: t.durationInSec,
+            durationString: new Date(t.durationInSec * 1000).toISOString().substr(14, 5),
+            requestedBy,
+            source: 'spotify'
+          })];
+        }
+      } catch (err: any) {
+        logger.error(`Spotify metadata parsing failed:`, err.message || err);
+        throw new Error(`Không thể lấy thông tin bài hát từ Spotify: ${err.message || err}`);
       }
     }
 
-    // 1. Playlists
-    if (type === 'yt_playlist') {
+    // 2. Check if the input is a direct URL (YouTube, SoundCloud, or other sites supported by yt-dlp)
+    if (cleanInput.startsWith('http://') || cleanInput.startsWith('https://')) {
       try {
-        const playlist = await play.playlist_info(cleanInput, { incomplete: true });
-        const videos = await playlist.all_videos();
-        return videos.map((v) => new Track({
-          title: v.title || 'Unknown YouTube Video',
-          url: v.url,
-          thumbnail: v.thumbnails[0]?.url || '',
-          duration: v.durationInSec,
-          durationString: v.durationRaw || '0:00',
+        logger.info(`Fetching metadata via yt-dlp for direct URL: "${cleanInput}"`);
+        const metadataList = await ytDlpGetMetadata(cleanInput);
+        const source = cleanInput.includes('soundcloud.com') ? 'soundcloud' : 'youtube';
+        
+        return metadataList.map(item => new Track({
+          title: item.title,
+          url: item.url,
+          thumbnail: item.thumbnail,
+          duration: item.duration,
+          durationString: item.durationString,
           requestedBy,
-          source: 'youtube'
+          source
         }));
       } catch (err: any) {
-        logger.error(`Failed to parse YouTube playlist with play-dl:`, err.message || err);
-        throw new Error(`Không thể tải playlist YouTube (Lỗi bot hoặc cookie hết hạn). Chi tiết: ${err.message || err}`);
+        logger.error(`yt-dlp metadata fetch failed for URL "${cleanInput}":`, err.message || err);
+        throw new Error(`Không thể lấy thông tin bài hát từ URL này. Đảm bảo link hoạt động hoặc cookie của bạn hợp lệ. Chi tiết: ${err.message || err}`);
       }
-    }
-
-    if (type === 'sp_playlist' || type === 'sp_album') {
-      const spotifyData = await play.spotify(cleanInput);
-      const tracks = await (spotifyData as any).all_tracks();
-      return tracks.map((t) => new Track({
-        title: `${t.name} - ${t.artists.map((a) => a.name).join(', ')}`,
-        url: t.url,
-        thumbnail: '', // Spotify play-dl tracks don't always contain immediate thumbnails easily
-        duration: t.durationInSec,
-        durationString: new Date(t.durationInSec * 1000).toISOString().substr(14, 5),
-        requestedBy,
-        source: 'spotify'
-      }));
-    }
-
-    // 2. Individual Tracks
-    if (type === 'yt_video') {
-      try {
-        const videoInfo = await play.video_basic_info(cleanInput);
-        const v = videoInfo.video_details;
-        return [new Track({
-          title: v.title || 'Unknown YouTube Video',
-          url: v.url,
-          thumbnail: v.thumbnails[0]?.url || '',
-          duration: v.durationInSec,
-          durationString: v.durationRaw || '0:00',
-          requestedBy,
-          source: 'youtube'
-        })];
-      } catch (err: any) {
-        logger.warn(`play-dl video_basic_info failed for "${cleanInput}", falling back to @distube/ytdl-core:`, err.message || err);
-        try {
-          const agent = getYtdlAgent();
-          const info = await ytdl.getBasicInfo(cleanInput, {
-            agent,
-            requestOptions: {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept-Language': 'en-US,en;q=0.9',
-              }
-            }
-          });
-          const v = info.videoDetails;
-          const durationSec = parseInt(v.lengthSeconds || '0', 10);
-          
-          // format durationString safely
-          let durationString = '0:00';
-          if (durationSec > 0) {
-            const dateStr = new Date(durationSec * 1000).toISOString();
-            durationString = durationSec >= 3600 ? dateStr.substr(11, 8) : dateStr.substr(14, 5);
-          }
-
-          return [new Track({
-            title: v.title || 'Unknown YouTube Video',
-            url: v.video_url,
-            thumbnail: v.thumbnails[0]?.url || '',
-            duration: durationSec,
-            durationString,
-            requestedBy,
-            source: 'youtube'
-          })];
-        } catch (subErr: any) {
-          logger.error(`Both play-dl and @distube/ytdl-core failed to get video info for "${cleanInput}":`, subErr.message || subErr);
-          throw subErr;
-        }
-      }
-    }
-
-    if (type === 'sp_track') {
-      const spotifyTrack = await play.spotify(cleanInput);
-      const t = spotifyTrack as any;
-      return [new Track({
-        title: `${t.name} - ${t.artists.map((a: any) => a.name).join(', ')}`,
-        url: t.url,
-        thumbnail: t.thumbnail?.url || '',
-        duration: t.durationInSec,
-        durationString: new Date(t.durationInSec * 1000).toISOString().substr(14, 5),
-        requestedBy,
-        source: 'spotify'
-      })];
-    }
-
-    if (type === 'so_track') {
-      const soundcloudTrack = await play.soundcloud(cleanInput);
-      const t = soundcloudTrack as any;
-      return [new Track({
-        title: t.name || 'Unknown SoundCloud Track',
-        url: t.url,
-        thumbnail: t.thumbnail || '',
-        duration: Math.floor((t.duration || 0) / 1000),
-        durationString: new Date(t.duration || 0).toISOString().substr(14, 5),
-        requestedBy,
-        source: 'soundcloud'
-      })];
-    }
-
-    if (type === 'so_playlist') {
-      const soundcloudPlaylist = await play.soundcloud(cleanInput);
-      const tracks = await (soundcloudPlaylist as any).all_tracks();
-      return tracks.map((t: any) => new Track({
-        title: t.name || 'Unknown SoundCloud Track',
-        url: t.url,
-        thumbnail: t.thumbnail || '',
-        duration: Math.floor((t.duration || 0) / 1000),
-        durationString: new Date(t.duration || 0).toISOString().substr(14, 5),
-        requestedBy,
-        source: 'soundcloud'
-      }));
     }
 
     // 3. Search query (fallback)
-    logger.info(`Searching YouTube for query: "${cleanInput}"...`);
+    logger.info(`Searching YouTube via yt-dlp for query: "${cleanInput}"`);
     try {
-      const searchResults = await play.search(cleanInput, { limit: 1 });
+      const searchResults = await searchYouTube(cleanInput, 1);
       if (searchResults && searchResults.length > 0) {
         const v = searchResults[0];
         return [new Track({
-          title: v.title || 'Unknown YouTube Video',
+          title: v.title,
           url: v.url,
-          thumbnail: v.thumbnails[0]?.url || '',
-          duration: v.durationInSec,
-          durationString: v.durationRaw || '0:00',
+          thumbnail: v.thumbnail,
+          duration: v.duration,
+          durationString: v.durationString,
           requestedBy,
           source: 'youtube'
         })];
       }
-    } catch (err) {
-      logger.warn(`play-dl search failed, falling back to YouTubeSearch...`, err);
-      try {
-        const video = await YouTubeSearch.searchOne(cleanInput);
-        if (video) {
-          return [new Track({
-            title: video.title || 'Unknown YouTube Video',
-            url: video.url,
-            thumbnail: video.thumbnail?.url || '',
-            duration: Math.floor(video.duration / 1000),
-            durationString: video.durationFormatted || '0:00',
-            requestedBy,
-            source: 'youtube'
-          })];
-        }
-      } catch (subErr: any) {
-        logger.error(`Both play-dl and YouTubeSearch searches failed:`, subErr.message || subErr);
-      }
+    } catch (err: any) {
+      logger.error(`yt-dlp search failed for query "${cleanInput}":`, err.message || err);
     }
 
-    throw new Error('No tracks or search results found for the input provided.');
+    throw new Error('Không tìm thấy kết quả hoặc bài hát nào cho yêu cầu này.');
   }
 }

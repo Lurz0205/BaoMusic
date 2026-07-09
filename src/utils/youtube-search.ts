@@ -1,7 +1,9 @@
 import { config } from '../config/index.js';
 import fs from 'fs';
-import { cleanAndFormatCookie } from './playdl-init.js';
 import { logger } from './logger.js';
+import { execFile, spawn } from 'child_process';
+import path from 'path';
+import { Readable } from 'stream';
 
 export interface YouTubeSearchResult {
   id: string;
@@ -12,113 +14,242 @@ export interface YouTubeSearchResult {
   durationString: string;
 }
 
-function findVideoRenderers(obj: any, results: any[] = []): any[] {
-  if (!obj || typeof obj !== 'object') return results;
+const ROOT_DIR = process.cwd();
+const YTDLP_PATH = path.join(ROOT_DIR, 'bin', 'yt-dlp');
+
+function formatDuration(durationSec: number): string {
+  if (isNaN(durationSec) || durationSec <= 0) return '0:00';
+  const hours = Math.floor(durationSec / 3600);
+  const minutes = Math.floor((durationSec % 3600) / 60);
+  const seconds = Math.floor(durationSec % 60);
   
-  if (obj.videoRenderer) {
-    results.push(obj.videoRenderer);
+  const parts = [];
+  if (hours > 0) {
+    parts.push(hours);
+    parts.push(minutes.toString().padStart(2, '0'));
+  } else {
+    parts.push(minutes);
   }
-  
-  // To avoid circular references (though rare in native parsed JSON),
-  // and handle standard JSON structures
-  for (const key of Object.keys(obj)) {
-    try {
-      findVideoRenderers(obj[key], results);
-    } catch {
-      // safe fallback
-    }
-  }
-  
-  return results;
+  parts.push(seconds.toString().padStart(2, '0'));
+  return parts.join(':');
 }
 
-function parseDuration(durationStr: string): number {
-  if (!durationStr) return 0;
-  const parts = durationStr.split(':').map(Number);
-  let seconds = 0;
-  if (parts.length === 2) {
-    seconds = parts[0] * 60 + parts[1];
-  } else if (parts.length === 3) {
-    seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-  }
-  return isNaN(seconds) ? 0 : seconds;
+/**
+ * Runs the yt-dlp binary with specific arguments and returns stdout.
+ */
+export function runYtDlp(args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    logger.info(`Running yt-dlp command: "${YTDLP_PATH} ${args.map(a => a.includes(' ') ? `"${a}"` : a).join(' ')}"`);
+    execFile(YTDLP_PATH, args, { maxBuffer: 15 * 1024 * 1024 }, (error, stdout, stderr) => {
+      if (error) {
+        logger.warn(`yt-dlp warning/error output: ${stderr || error.message}`);
+        // Even if there's a minor error exit code, if we have valid stdout, use it
+        if (stdout.trim()) {
+          return resolve(stdout);
+        }
+        return reject(error);
+      }
+      resolve(stdout);
+    });
+  });
 }
 
+/**
+ * Searches YouTube using yt-dlp's fast search options.
+ */
 export async function searchYouTube(query: string, limit: number = 5): Promise<YouTubeSearchResult[]> {
   try {
-    const cookiePath = config.absoluteCookiePath;
-    let cookieHeader = '';
+    const args = [
+      `ytsearch${limit}:${query}`,
+      '--flat-playlist',
+      '--dump-json',
+      '--js-runtimes', 'node'
+    ];
+
+    // Pass cookies if configured and exists
+    if (config.hasCookies) {
+      args.push('--cookies', config.absoluteCookiePath);
+    }
+
+    // Pass PO Token if configured
+    const poToken = process.env.YT_PO_TOKEN;
+    const visitorData = process.env.YT_VISITOR_DATA;
+    if (poToken) {
+      const val = visitorData ? `${poToken}~${visitorData}` : poToken;
+      args.push('--extractor-args', `youtube:po_token=${val}`);
+    }
+
+    // Pass proxy if configured
+    const proxy = process.env.YT_PROXY;
+    if (proxy) {
+      args.push('--proxy', proxy);
+    }
     
-    if (fs.existsSync(cookiePath)) {
-      try {
-        const cookieData = fs.readFileSync(cookiePath, 'utf8');
-        cookieHeader = cleanAndFormatCookie(cookieData);
-      } catch (err) {
-        logger.error('Failed to read/format cookies for searchYouTube:', err);
-      }
-    }
-
-    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&hl=en`;
-    
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-        ...(cookieHeader ? { 'Cookie': cookieHeader } : {})
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const html = await response.text();
-    
-    // Attempt to extract the initial data JSON
-    const match = html.match(/ytInitialData\s*=\s*({.+?});/s) || 
-                  html.match(/ytInitialData\s*=\s*({.+?})\s*<\/script>/s) ||
-                  html.match(/window\["ytInitialData"\]\s*=\s*({.+?});/s);
-                  
-    if (!match) {
-      throw new Error('Could not find ytInitialData in search results HTML.');
-    }
-
-    let ytInitialData: any = null;
-    try {
-      ytInitialData = JSON.parse(match[1]);
-    } catch (parseErr: any) {
-      throw new Error(`Failed to parse ytInitialData JSON: ${parseErr.message}`);
-    }
-
-    const renderers = findVideoRenderers(ytInitialData);
+    const output = await runYtDlp(args);
+    const lines = output.trim().split('\n');
     const results: YouTubeSearchResult[] = [];
     
-    for (const videoRenderer of renderers) {
-      if (results.length >= limit) break;
-      
-      const videoId = videoRenderer.videoId;
-      if (!videoId) continue;
-      
-      const title = videoRenderer.title?.runs?.[0]?.text || videoRenderer.title?.simpleText || 'Unknown Title';
-      const thumbnail = videoRenderer.thumbnail?.thumbnails?.[0]?.url || '';
-      const durationString = videoRenderer.lengthText?.simpleText || '0:00';
-      const duration = parseDuration(durationString);
-      
-      results.push({
-        id: videoId,
-        title,
-        url: `https://www.youtube.com/watch?v=${videoId}`,
-        thumbnail,
-        duration,
-        durationString
-      });
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const item = JSON.parse(line);
+        // Skip channel entries
+        if (item._type === 'playlist' || item._type === 'url') {
+          if (item.url && (item.url.includes('channel/') || item.url.includes('@'))) continue;
+        }
+        
+        const id = item.id || '';
+        const title = item.title || 'Unknown Title';
+        const url = item.url || `https://www.youtube.com/watch?v=${id}`;
+        const thumbnail = item.thumbnails?.[0]?.url || item.thumbnail || '';
+        const duration = item.duration || 0;
+        const durationString = item.duration_string || formatDuration(duration);
+        
+        results.push({
+          id,
+          title,
+          url,
+          thumbnail,
+          duration,
+          durationString
+        });
+      } catch {
+        // Skip individual parsing error
+      }
     }
-
+    
     return results;
   } catch (err: any) {
-    logger.error(`searchYouTube failed for query "${query}":`, err.message || err);
+    logger.error(`searchYouTube via yt-dlp failed for query "${query}":`, err.message || err);
     return [];
   }
+}
+
+/**
+ * Fetches metadata for an individual video or a playlist using yt-dlp.
+ */
+export async function ytDlpGetMetadata(url: string): Promise<YouTubeSearchResult[]> {
+  try {
+    const args = [
+      url,
+      '--flat-playlist',
+      '--dump-json',
+      '--js-runtimes', 'node'
+    ];
+
+    if (config.hasCookies) {
+      args.push('--cookies', config.absoluteCookiePath);
+    }
+
+    // Pass PO Token if configured
+    const poToken = process.env.YT_PO_TOKEN;
+    const visitorData = process.env.YT_VISITOR_DATA;
+    if (poToken) {
+      const val = visitorData ? `${poToken}~${visitorData}` : poToken;
+      args.push('--extractor-args', `youtube:po_token=${val}`);
+    }
+
+    // Pass proxy if configured
+    const proxy = process.env.YT_PROXY;
+    if (proxy) {
+      args.push('--proxy', proxy);
+    }
+    
+    const output = await runYtDlp(args);
+    const lines = output.trim().split('\n');
+    const results: YouTubeSearchResult[] = [];
+    
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const item = JSON.parse(line);
+        const id = item.id || '';
+        const title = item.title || 'Unknown Title';
+        const itemUrl = item.webpage_url || item.url || (id ? `https://www.youtube.com/watch?v=${id}` : url);
+        const thumbnail = item.thumbnails?.[0]?.url || item.thumbnail || '';
+        const duration = item.duration || 0;
+        const durationString = item.duration_string || formatDuration(duration);
+        
+        results.push({
+          id,
+          title,
+          url: itemUrl,
+          thumbnail,
+          duration,
+          durationString
+        });
+      } catch {
+        // Skip invalid line
+      }
+    }
+    
+    if (results.length === 0) {
+      throw new Error(`Không tìm thấy kết quả hoặc không thể parse metadata từ URL: ${url}`);
+    }
+    
+    return results;
+  } catch (err: any) {
+    logger.error(`ytDlpGetMetadata failed for URL "${url}":`, err.message || err);
+    throw err;
+  }
+}
+
+/**
+ * Spawns a yt-dlp audio stream process and returns its stdout.
+ */
+export function spawnYtDlpStream(url: string): Readable {
+  const args = [
+    '-f', 'bestaudio',
+    '--no-playlist',
+    '--buffer-size', '16K',
+    '-o', '-',
+    '--js-runtimes', 'node',
+    url
+  ];
+
+  if (config.hasCookies) {
+    args.push('--cookies', config.absoluteCookiePath);
+  }
+
+  // Pass PO Token if configured
+  const poToken = process.env.YT_PO_TOKEN;
+  const visitorData = process.env.YT_VISITOR_DATA;
+  if (poToken) {
+    const val = visitorData ? `${poToken}~${visitorData}` : poToken;
+    args.push('--extractor-args', `youtube:po_token=${val}`);
+  }
+
+  // Pass proxy if configured
+  const proxy = process.env.YT_PROXY;
+  if (proxy) {
+    args.push('--proxy', proxy);
+  }
+
+  logger.info(`Spawning yt-dlp audio stream: "${url}"`);
+  const child = spawn(YTDLP_PATH, args, {
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+
+  child.stderr.on('data', (data) => {
+    const msg = data.toString().trim();
+    if (msg) {
+      logger.warn(`[yt-dlp stream stderr]: ${msg}`);
+    }
+  });
+
+  child.on('error', (err) => {
+    logger.error(`yt-dlp stream process failed to spawn for "${url}":`, err);
+  });
+
+  child.on('exit', (code, signal) => {
+    if (code !== 0 && code !== null) {
+      logger.warn(`yt-dlp stream process exited with code ${code}, signal: ${signal}`);
+    } else {
+      logger.info(`yt-dlp stream process completed successfully.`);
+    }
+  });
+
+  return child.stdout;
 }
 
 export const YouTubeSearch = {
@@ -129,7 +260,7 @@ export const YouTubeSearch = {
       title: r.title,
       url: r.url,
       thumbnail: { url: r.thumbnail },
-      duration: r.duration * 1000, // youtube-sr uses milliseconds
+      duration: r.duration * 1000, // standard conversion to ms
       durationFormatted: r.durationString
     }));
   },
@@ -139,4 +270,3 @@ export const YouTubeSearch = {
     return results.length > 0 ? results[0] : null;
   }
 };
-
