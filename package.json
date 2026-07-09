@@ -23,6 +23,7 @@
     "libsodium-wrappers": "^0.8.4",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
+    "opusscript": "^0.0.8",
     "play-dl": "^1.9.7",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",

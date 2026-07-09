@@ -9,6 +9,7 @@ export interface CookieObject {
   path: string;
   secure: boolean;
   expirationDate?: number;
+  expires?: number;
   name: string;
   value: string;
 }
@@ -40,6 +41,7 @@ export function parseNetscapeCookies(raw: string): CookieObject[] {
           path,
           secure,
           expirationDate: isNaN(expirationDate) ? undefined : expirationDate,
+          expires: isNaN(expirationDate) ? undefined : expirationDate,
           name: cleanName,
           value: cleanValue
         });
@@ -131,9 +133,12 @@ export async function initPlayDL() {
         await play.setToken({
           youtube: {
             cookie: cleanedCookie
-          }
+          },
+          useragent: [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          ]
         });
-        logger.success('Play-DL initialized successfully with custom youtube cookies.');
+        logger.success('Play-DL initialized successfully with custom youtube cookies and Chrome User-Agent.');
       } else {
         logger.warn('Cookie file is empty or could not be parsed. Play-DL starting without cookies.');
       }

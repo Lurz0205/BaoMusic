@@ -89,7 +89,13 @@ export class Track implements TrackData {
             filter: 'audioonly',
             quality: 'highestaudio',
             highWaterMark: 1 << 25, // 32MB buffer size for extremely smooth playback
-            agent
+            agent,
+            requestOptions: {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9',
+              }
+            }
           });
           
           resource = createAudioResource(ytdlStream, {
@@ -149,7 +155,15 @@ export class Track implements TrackData {
       try {
         logger.info(`Validating YouTube URL using @distube/ytdl-core: "${cleanInput}"...`);
         const agent = getYtdlAgent();
-        const info = await ytdl.getBasicInfo(cleanInput, { agent });
+        const info = await ytdl.getBasicInfo(cleanInput, {
+          agent,
+          requestOptions: {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept-Language': 'en-US,en;q=0.9',
+            }
+          }
+        });
         const v = info.videoDetails;
         const durationSec = parseInt(v.lengthSeconds || '0', 10);
         return [new Track({
@@ -218,7 +232,15 @@ export class Track implements TrackData {
         logger.warn(`play-dl video_basic_info failed for "${cleanInput}", falling back to @distube/ytdl-core:`, err.message || err);
         try {
           const agent = getYtdlAgent();
-          const info = await ytdl.getBasicInfo(cleanInput, { agent });
+          const info = await ytdl.getBasicInfo(cleanInput, {
+            agent,
+            requestOptions: {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9',
+              }
+            }
+          });
           const v = info.videoDetails;
           const durationSec = parseInt(v.lengthSeconds || '0', 10);
           
