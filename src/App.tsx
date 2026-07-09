@@ -37,14 +37,8 @@ export default function App() {
     tokenSet: boolean;
   } | null>(null);
 
-  // Form states
-  const [tokenInput, setTokenInput] = useState('');
-  const [clientIdInput, setClientIdInput] = useState('');
-  const [showToken, setShowToken] = useState(false);
-  const [cookieInput, setCookieInput] = useState('');
-  
   // UI states
-  const [activeTab, setActiveTab] = useState<'status' | 'config' | 'guide'>('status');
+  const [activeTab, setActiveTab] = useState<'status' | 'guide'>('status');
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [copiedText, setCopiedText] = useState<string | null>(null);
@@ -63,7 +57,6 @@ export default function App() {
       if (configRes.ok) {
         const conf = await configRes.json();
         setConfig(conf);
-        setClientIdInput(conf.clientId || '');
       }
     } catch (err) {
       console.error('Failed to fetch data from Express backend:', err);
@@ -80,66 +73,6 @@ export default function App() {
   const triggerAlert = (type: 'success' | 'error', message: string) => {
     setAlert({ type, message });
     setTimeout(() => setAlert(null), 5000);
-  };
-
-  // Save Bot Token and Client ID credentials
-  const handleSaveConfig = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!tokenInput.trim() || !clientIdInput.trim()) {
-      return triggerAlert('error', 'Vui lòng nhập đầy đủ Token và Client ID!');
-    }
-
-    setLoading(true);
-    try {
-      const res = await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: tokenInput, clientId: clientIdInput }),
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        triggerAlert('success', data.message);
-        setTokenInput('');
-        fetchData();
-      } else {
-        triggerAlert('error', data.message || 'Lưu cấu hình thất bại.');
-      }
-    } catch (err: any) {
-      triggerAlert('error', `Lỗi kết nối: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Save cookie.txt contents
-  const handleSaveCookie = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!cookieInput.trim()) {
-      return triggerAlert('error', 'Nội dung cookie không được bỏ trống!');
-    }
-
-    setLoading(true);
-    try {
-      const res = await fetch('/api/cookie', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cookieText: cookieInput }),
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        triggerAlert('success', data.message);
-        setCookieInput('');
-        fetchData();
-      } else {
-        triggerAlert('error', data.message || 'Lưu cookie thất bại.');
-      }
-    } catch (err: any) {
-      triggerAlert('error', `Lỗi kết nối: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
   };
 
   // Sync / Register slash commands with Discord API
@@ -235,16 +168,6 @@ export default function App() {
               }`}
             >
               Trình phát & Trạng thái
-            </button>
-            <button
-              onClick={() => setActiveTab('config')}
-              className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
-                activeTab === 'config' 
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100' 
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              Cấu hình & Cookies
             </button>
             <button
               onClick={() => setActiveTab('guide')}
@@ -343,14 +266,14 @@ export default function App() {
                     ⚠️ Bot chưa được cấu hình thông tin kết nối!
                   </h4>
                   <p className="text-sm text-amber-700 max-w-2xl">
-                    Vui lòng chuyển sang tab <strong>Cấu hình & Cookies</strong> để nhập Discord Bot Token và Client ID của bạn để kích hoạt bot hoạt động.
+                    Vui lòng cấu hình các biến môi trường <strong>BOT_TOKEN</strong> và <strong>CLIENT_ID</strong> trong file .env hoặc trên giao diện của Render để kích hoạt bot hoạt động.
                   </p>
                 </div>
                 <button
-                  onClick={() => setActiveTab('config')}
+                  onClick={() => setActiveTab('guide')}
                   className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-5 py-2.5 rounded-xl text-sm shadow-md transition-all duration-150"
                 >
-                  Cấu hình ngay
+                  Xem hướng dẫn cấu hình
                 </button>
               </div>
             )}
@@ -630,130 +553,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Tab content view 2: Config & Credentials */}
-        {activeTab === 'config' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Credentials Configuration card */}
-            <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm p-6 space-y-6">
-              <div className="flex items-center space-x-3 pb-4 border-b border-slate-100">
-                <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
-                  <Settings className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900">Thông tin cấu hình Bot</h3>
-                  <p className="text-xs text-slate-500 font-medium">Nhập thông tin xác thực từ Discord Developer Portal</p>
-                </div>
-              </div>
 
-              <form onSubmit={handleSaveConfig} className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 tracking-wide uppercase flex items-center justify-between">
-                    <span>Discord Bot Token</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowToken(!showToken)}
-                      className="text-indigo-600 hover:text-indigo-700 flex items-center gap-1 font-bold text-[10px] lowercase"
-                    >
-                      {showToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                      {showToken ? 'Ẩn' : 'Hiện'}
-                    </button>
-                  </label>
-                  <input
-                    type={showToken ? 'text' : 'password'}
-                    placeholder={config?.tokenSet ? '••••••••••••••••••••••••••••••••••••••••••••••••' : 'Nhập Discord Token của bạn'}
-                    value={tokenInput}
-                    onChange={(e) => setTokenInput(e.target.value)}
-                    className="w-full text-slate-800 font-mono text-sm px-4 py-3 rounded-xl border border-slate-200 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition duration-150"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 tracking-wide uppercase">Discord Client ID</label>
-                  <input
-                    type="text"
-                    placeholder="Nhập Client ID (Application ID) của bạn"
-                    value={clientIdInput}
-                    onChange={(e) => setClientIdInput(e.target.value)}
-                    className="w-full text-slate-800 font-mono text-sm px-4 py-3 rounded-xl border border-slate-200 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition duration-150"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm py-3 px-5 rounded-xl transition duration-150 cursor-pointer shadow-lg shadow-indigo-100 flex items-center justify-center gap-2"
-                >
-                  {loading && <RefreshCw className="w-4 h-4 animate-spin" />}
-                  Lưu cấu hình & Kết nối Bot
-                </button>
-              </form>
-
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-500 leading-relaxed space-y-2">
-                <div className="font-bold text-slate-700">Làm thế nào để lấy các thông tin này?</div>
-                <ol className="list-decimal list-inside space-y-1 pl-1">
-                  <li>Truy cập <a href="https://discord.com/developers/applications" target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline font-semibold">Discord Portal</a>.</li>
-                  <li>Tạo một Application mới, sao chép <strong>Application ID</strong> làm Client ID.</li>
-                  <li>Vào mục <strong>Bot</strong>, nhấn <strong>Reset Token</strong> và sao chép mã Token.</li>
-                  <li>Trong mục Bot, hãy cấp các quyền **Privileged Gateway Intents** (đặc biệt là <em>Guild Members, Message Content</em>).</li>
-                </ol>
-              </div>
-            </div>
-
-            {/* Cookies file configurations card */}
-            <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm p-6 space-y-6">
-              <div className="flex items-center space-x-3 pb-4 border-b border-slate-100">
-                <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
-                  <Upload className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900">YouTube cookies.txt</h3>
-                  <p className="text-xs text-slate-500 font-medium">Giúp vượt lỗi chặn YouTube hoặc phát nhạc giới hạn độ tuổi</p>
-                </div>
-              </div>
-
-              <form onSubmit={handleSaveCookie} className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 tracking-wide uppercase flex items-center justify-between">
-                    <span>Nội dung file cookies.txt</span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      config?.hasCookies ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                    }`}>
-                      {config?.hasCookies ? '🟢 Đã nạp Cookie' : '⚪ Chưa có Cookie'}
-                    </span>
-                  </label>
-                  <textarea
-                    placeholder="# Netscape HTTP Cookie File&#10;# This file was generated by cookies.txt extension&#10;.youtube.com&#x9;TRUE&#x9;/&#x9;TRUE&#x9;1734567890&#x9;HSID&#x9;..."
-                    value={cookieInput}
-                    onChange={(e) => setCookieInput(e.target.value)}
-                    rows={6}
-                    className="w-full text-slate-800 font-mono text-xs px-4 py-3 rounded-xl border border-slate-200 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition duration-150"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold text-sm py-3 px-5 rounded-xl transition duration-150 cursor-pointer shadow-lg flex items-center justify-center gap-2"
-                >
-                  <Upload className="w-4 h-4" />
-                  Cập nhật cookies.txt
-                </button>
-              </form>
-
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-500 leading-relaxed space-y-2">
-                <div className="font-bold text-slate-700">Làm thế nào để lấy cookies.txt?</div>
-                <ol className="list-decimal list-inside space-y-1 pl-1">
-                  <li>Cài đặt tiện ích mở rộng Chrome/Firefox tên là: <strong>Get cookies.txt LOCALLY</strong> hoặc <strong>cookies.txt</strong>.</li>
-                  <li>Đăng nhập tài khoản Google và mở trang <a href="https://www.youtube.com" target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline font-semibold">YouTube.com</a>.</li>
-                  <li>Click vào icon tiện ích và tải về file cookie dạng Netscape.</li>
-                  <li>Mở file đó ra, sao chép toàn bộ text nội dung và dán vào ô nhập liệu phía trên.</li>
-                </ol>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Tab content view 3: Deployment & Guides */}
         {activeTab === 'guide' && (
           <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm p-6 lg:p-8 space-y-8">
             <div className="flex items-center space-x-3 pb-5 border-b border-slate-100">
