@@ -8,9 +8,38 @@ dotenv.config();
 
 const ROOT_DIR = process.cwd();
 
+// Decode Client ID from Discord Bot Token
+function getClientIdFromToken(token: string): string {
+  try {
+    const parts = token.trim().split('.');
+    if (parts.length > 0) {
+      const decoded = Buffer.from(parts[0], 'base64').toString('utf-8');
+      if (/^\d{17,21}$/.test(decoded)) {
+        return decoded;
+      }
+    }
+  } catch (err) {
+    logger.error('Failed to parse client ID from token:', err);
+  }
+  return '';
+}
+
+const rawToken = process.env.BOT_TOKEN || '';
+let resolvedClientId = process.env.CLIENT_ID || '';
+
+if (rawToken) {
+  const extractedId = getClientIdFromToken(rawToken);
+  if (extractedId) {
+    if (resolvedClientId && resolvedClientId !== extractedId) {
+      logger.warn(`CLIENT_ID mismatch detected! Environment CLIENT_ID is ${resolvedClientId}, but BOT_TOKEN belongs to application ${extractedId}. Automatically correcting to ${extractedId} to prevent Discord Error 10002 (Unknown Application).`);
+    }
+    resolvedClientId = extractedId;
+  }
+}
+
 export const config = {
-  token: process.env.BOT_TOKEN || '',
-  clientId: process.env.CLIENT_ID || '',
+  token: rawToken,
+  clientId: resolvedClientId,
   port: parseInt(process.env.PORT || '3000', 10),
   cookiePath: process.env.COOKIE_PATH || path.join(ROOT_DIR, 'cookies', 'cookie.txt'),
   
@@ -40,4 +69,4 @@ export const config = {
   }
 };
 
-logger.info(`Configuration Loaded. Configured: ${config.isConfigured}, Has Cookies: ${config.hasCookies}`);
+logger.info(`Configuration Loaded. Configured: ${config.isConfigured}, Has Cookies: ${config.hasCookies}, Resolved Client ID: ${config.clientId}`);
