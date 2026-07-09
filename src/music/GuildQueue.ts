@@ -13,7 +13,7 @@ import play from 'play-dl';
 import { Track } from './Track.js';
 import { QueueState } from '../types.js';
 import { logger } from '../utils/logger.js';
-import { YouTube } from 'youtube-sr';
+import { YouTubeSearch } from '../utils/youtube-search.js';
 
 export class GuildQueue {
   public readonly guildId: string;
@@ -239,9 +239,9 @@ export class GuildQueue {
       try {
         searchResult = await play.search(lastTrack.title, { limit: 5 });
       } catch (err) {
-        logger.warn(`play-dl search failed in autoplay, falling back to youtube-sr...`, err);
+        logger.warn(`play-dl search failed in autoplay, falling back to YouTubeSearch...`, err);
         try {
-          const ytSrResults = await YouTube.search(lastTrack.title, { limit: 5 } as any);
+          const ytSrResults = await YouTubeSearch.search(lastTrack.title, { limit: 5 });
           searchResult = ytSrResults.map(v => ({
             title: v.title,
             url: v.url,
@@ -249,8 +249,8 @@ export class GuildQueue {
             durationInSec: Math.floor(v.duration / 1000),
             durationRaw: v.durationFormatted
           }));
-        } catch (subErr) {
-          logger.error(`youtube-sr search also failed in autoplay:`, subErr);
+        } catch (subErr: any) {
+          logger.error(`YouTubeSearch search also failed in autoplay:`, subErr.message || subErr);
         }
       }
       

@@ -1,7 +1,68 @@
 import play from 'play-dl';
+import ytdl from '@distube/ytdl-core';
 import fs from 'fs';
 import { config } from '../config/index.js';
 import { logger } from './logger.js';
+
+export interface CookieObject {
+  domain: string;
+  path: string;
+  secure: boolean;
+  expirationDate?: number;
+  name: string;
+  value: string;
+}
+
+export function parseNetscapeCookies(raw: string): CookieObject[] {
+  const content = raw.trim();
+  if (!content) return [];
+  
+  const cookies: CookieObject[] = [];
+  const lines = content.split(/\r?\n/);
+  for (let line of lines) {
+    line = line.trim();
+    if (!line || line.startsWith('#')) continue;
+    const parts = line.split('\t');
+    if (parts.length >= 7) {
+      const domain = parts[0].trim();
+      const path = parts[2].trim();
+      const secure = parts[3].trim().toUpperCase() === 'TRUE';
+      const expirationDate = parseInt(parts[4].trim(), 10);
+      const name = parts[5].trim();
+      const value = parts[6].trim();
+      
+      const cleanName = name.replace(/[\x00-\x1F\x7F-\x9F]/g, '');
+      const cleanValue = value.replace(/[\x00-\x1F\x7F-\x9F]/g, '');
+      
+      if (cleanName && cleanValue) {
+        cookies.push({
+          domain,
+          path,
+          secure,
+          expirationDate: isNaN(expirationDate) ? undefined : expirationDate,
+          name: cleanName,
+          value: cleanValue
+        });
+      }
+    }
+  }
+  return cookies;
+}
+
+export function parseCookies(raw: string): CookieObject[] {
+  const content = raw.trim();
+  if (!content) return [];
+  
+  if (content.startsWith('[') && content.endsWith(']')) {
+    try {
+      return JSON.parse(content);
+    } catch {
+      // Fallback to Netscape
+    }
+  }
+  
+  return parseNetscapeCookies(raw);
+}
 
 export function cleanAndFormatCookie(raw: string): string {
   const content = raw.trim();
@@ -33,6 +94,31 @@ export function cleanAndFormatCookie(raw: string): string {
   return content.replace(/[\x00-\x1F\x7F-\x9F]/g, '');
 }
 
+let cachedYtdlAgent: any = null;
+
+export function getYtdlAgent() {
+  if (cachedYtdlAgent) return cachedYtdlAgent;
+  try {
+    if (config.hasCookies) {
+      const cookiePath = config.absoluteCookiePath;
+      const cookieData = fs.readFileSync(cookiePath, 'utf8');
+      const cookiesArray = parseCookies(cookieData);
+      if (cookiesArray && cookiesArray.length > 0) {
+        cachedYtdlAgent = ytdl.createAgent(cookiesArray);
+        logger.success(`ytdl-core agent successfully initialized with ${cookiesArray.length} parsed cookies.`);
+      }
+    }
+  } catch (err) {
+    logger.error('Failed to initialize ytdl-core agent with cookies:', err);
+  }
+  
+  if (!cachedYtdlAgent) {
+    logger.info('Initializing ytdl-core with default agent.');
+    cachedYtdlAgent = ytdl.createAgent();
+  }
+  return cachedYtdlAgent;
+}
+
 export async function initPlayDL() {
   try {
     if (config.hasCookies) {
@@ -54,6 +140,9 @@ export async function initPlayDL() {
     } else {
       logger.info('No cookie file found. Play-DL will operate without cookies.');
     }
+    
+    // Also warm up/initialize ytdl-core agent
+    getYtdlAgent();
   } catch (err: any) {
     logger.error('Failed to initialize Play-DL with custom cookies:', err);
   }

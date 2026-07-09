@@ -2,7 +2,9 @@ import play from 'play-dl';
 import { createAudioResource, AudioResource } from '@discordjs/voice';
 import { TrackData } from '../types.js';
 import { logger } from '../utils/logger.js';
-import { YouTube } from 'youtube-sr';
+import { YouTubeSearch } from '../utils/youtube-search.js';
+import ytdl from '@distube/ytdl-core';
+import { getYtdlAgent } from '../utils/playdl-init.js';
 
 export class Track implements TrackData {
   public readonly title: string;
@@ -45,15 +47,15 @@ export class Track implements TrackData {
             logger.info(`Found YouTube equivalent for Spotify (via play-dl): "${searchResults[0].title}" (${youtubeUrl})`);
           }
         } catch (err) {
-          logger.warn(`play-dl search failed for Spotify conversion, falling back to youtube-sr...`, err);
+          logger.warn(`play-dl search failed for Spotify conversion, falling back to YouTubeSearch...`, err);
           try {
-            const video = await YouTube.searchOne(this.title);
+            const video = await YouTubeSearch.searchOne(this.title);
             if (video) {
               youtubeUrl = video.url;
-              logger.info(`Found YouTube equivalent for Spotify (via youtube-sr): "${video.title}" (${youtubeUrl})`);
+              logger.info(`Found YouTube equivalent for Spotify (via YouTubeSearch): "${video.title}" (${youtubeUrl})`);
             }
-          } catch (subErr) {
-            logger.error(`youtube-sr search also failed for Spotify conversion:`, subErr);
+          } catch (subErr: any) {
+            logger.error(`YouTubeSearch search also failed for Spotify conversion:`, subErr.message || subErr);
           }
         }
 
@@ -65,21 +67,45 @@ export class Track implements TrackData {
       }
 
       // Stream the audio from the finalized URL
-      const streamInfo = await play.stream(finalUrl, {
-        quality: 2, // 2 = High quality audio stream
-        seek: 0,
-      });
+      let resource;
+      try {
+        logger.info(`Attempting to stream "${this.title}" using play-dl...`);
+        const streamInfo = await play.stream(finalUrl, {
+          quality: 2, // 2 = High quality audio stream
+          seek: 0,
+        });
 
-      // Create and return the discord voice audio resource
-      const resource = createAudioResource(streamInfo.stream, {
-        inputType: streamInfo.type,
-        metadata: this,
-        inlineVolume: true,
-      });
+        resource = createAudioResource(streamInfo.stream, {
+          inputType: streamInfo.type,
+          metadata: this,
+          inlineVolume: true,
+        });
+      } catch (playDlError: any) {
+        logger.warn(`play-dl stream failed for "${this.title}": ${playDlError.message || playDlError}. Falling back to @distube/ytdl-core...`);
+        
+        try {
+          const agent = getYtdlAgent();
+          const ytdlStream = ytdl(finalUrl, {
+            filter: 'audioonly',
+            quality: 'highestaudio',
+            highWaterMark: 1 << 25, // 32MB buffer size for extremely smooth playback
+            agent
+          });
+          
+          resource = createAudioResource(ytdlStream, {
+            metadata: this,
+            inlineVolume: true,
+          });
+          logger.success(`Successfully generated fallback stream with @distube/ytdl-core for "${this.title}"`);
+        } catch (ytdlError: any) {
+          logger.error(`Both play-dl and @distube/ytdl-core failed to stream "${this.title}":`, ytdlError.message || ytdlError);
+          throw ytdlError;
+        }
+      }
 
       return resource;
     } catch (err: any) {
-      logger.error(`Error creating audio resource for "${this.title}" (Attempt ${retryCount + 1}/3):`, err);
+      logger.error(`Error creating audio resource for "${this.title}" (Attempt ${retryCount + 1}/3):`, err.message || err);
       if (retryCount < 2) {
         logger.info(`Retrying stream generation for "${this.title}"...`);
         return this.createAudioResource(retryCount + 1);
@@ -111,21 +137,53 @@ export class Track implements TrackData {
     requestedBy: { username: string; avatarUrl?: string }
   ): Promise<Track[]> {
     const cleanInput = input.trim();
-    const type = await play.validate(cleanInput);
+    let type: any = false;
+    try {
+      type = await play.validate(cleanInput);
+    } catch (err: any) {
+      logger.warn(`play.validate failed for input "${cleanInput}", falling back:`, err.message || err);
+    }
+
+    // Fallback: If play-dl did not validate or failed, check if it's a valid YouTube URL via ytdl-core
+    if (!type && ytdl.validateURL(cleanInput)) {
+      try {
+        logger.info(`Validating YouTube URL using @distube/ytdl-core: "${cleanInput}"...`);
+        const agent = getYtdlAgent();
+        const info = await ytdl.getBasicInfo(cleanInput, { agent });
+        const v = info.videoDetails;
+        const durationSec = parseInt(v.lengthSeconds || '0', 10);
+        return [new Track({
+          title: v.title || 'Unknown YouTube Video',
+          url: v.video_url,
+          thumbnail: v.thumbnails[0]?.url || '',
+          duration: durationSec,
+          durationString: new Date(durationSec * 1000).toISOString().substr(14, 5),
+          requestedBy,
+          source: 'youtube'
+        })];
+      } catch (ytdlErr: any) {
+        logger.warn(`@distube/ytdl-core URL parsing failed for "${cleanInput}":`, ytdlErr.message || ytdlErr);
+      }
+    }
 
     // 1. Playlists
     if (type === 'yt_playlist') {
-      const playlist = await play.playlist_info(cleanInput, { incomplete: true });
-      const videos = await playlist.all_videos();
-      return videos.map((v) => new Track({
-        title: v.title || 'Unknown YouTube Video',
-        url: v.url,
-        thumbnail: v.thumbnails[0]?.url || '',
-        duration: v.durationInSec,
-        durationString: v.durationRaw || '0:00',
-        requestedBy,
-        source: 'youtube'
-      }));
+      try {
+        const playlist = await play.playlist_info(cleanInput, { incomplete: true });
+        const videos = await playlist.all_videos();
+        return videos.map((v) => new Track({
+          title: v.title || 'Unknown YouTube Video',
+          url: v.url,
+          thumbnail: v.thumbnails[0]?.url || '',
+          duration: v.durationInSec,
+          durationString: v.durationRaw || '0:00',
+          requestedBy,
+          source: 'youtube'
+        }));
+      } catch (err: any) {
+        logger.error(`Failed to parse YouTube playlist with play-dl:`, err.message || err);
+        throw new Error(`Không thể tải playlist YouTube (Lỗi bot hoặc cookie hết hạn). Chi tiết: ${err.message || err}`);
+      }
     }
 
     if (type === 'sp_playlist' || type === 'sp_album') {
@@ -144,17 +202,47 @@ export class Track implements TrackData {
 
     // 2. Individual Tracks
     if (type === 'yt_video') {
-      const videoInfo = await play.video_basic_info(cleanInput);
-      const v = videoInfo.video_details;
-      return [new Track({
-        title: v.title || 'Unknown YouTube Video',
-        url: v.url,
-        thumbnail: v.thumbnails[0]?.url || '',
-        duration: v.durationInSec,
-        durationString: v.durationRaw || '0:00',
-        requestedBy,
-        source: 'youtube'
-      })];
+      try {
+        const videoInfo = await play.video_basic_info(cleanInput);
+        const v = videoInfo.video_details;
+        return [new Track({
+          title: v.title || 'Unknown YouTube Video',
+          url: v.url,
+          thumbnail: v.thumbnails[0]?.url || '',
+          duration: v.durationInSec,
+          durationString: v.durationRaw || '0:00',
+          requestedBy,
+          source: 'youtube'
+        })];
+      } catch (err: any) {
+        logger.warn(`play-dl video_basic_info failed for "${cleanInput}", falling back to @distube/ytdl-core:`, err.message || err);
+        try {
+          const agent = getYtdlAgent();
+          const info = await ytdl.getBasicInfo(cleanInput, { agent });
+          const v = info.videoDetails;
+          const durationSec = parseInt(v.lengthSeconds || '0', 10);
+          
+          // format durationString safely
+          let durationString = '0:00';
+          if (durationSec > 0) {
+            const dateStr = new Date(durationSec * 1000).toISOString();
+            durationString = durationSec >= 3600 ? dateStr.substr(11, 8) : dateStr.substr(14, 5);
+          }
+
+          return [new Track({
+            title: v.title || 'Unknown YouTube Video',
+            url: v.video_url,
+            thumbnail: v.thumbnails[0]?.url || '',
+            duration: durationSec,
+            durationString,
+            requestedBy,
+            source: 'youtube'
+          })];
+        } catch (subErr: any) {
+          logger.error(`Both play-dl and @distube/ytdl-core failed to get video info for "${cleanInput}":`, subErr.message || subErr);
+          throw subErr;
+        }
+      }
     }
 
     if (type === 'sp_track') {
@@ -216,9 +304,9 @@ export class Track implements TrackData {
         })];
       }
     } catch (err) {
-      logger.warn(`play-dl search failed, falling back to youtube-sr search...`, err);
+      logger.warn(`play-dl search failed, falling back to YouTubeSearch...`, err);
       try {
-        const video = await YouTube.searchOne(cleanInput);
+        const video = await YouTubeSearch.searchOne(cleanInput);
         if (video) {
           return [new Track({
             title: video.title || 'Unknown YouTube Video',
@@ -230,8 +318,8 @@ export class Track implements TrackData {
             source: 'youtube'
           })];
         }
-      } catch (subErr) {
-        logger.error(`Both play-dl and youtube-sr searches failed:`, subErr);
+      } catch (subErr: any) {
+        logger.error(`Both play-dl and YouTubeSearch searches failed:`, subErr.message || subErr);
       }
     }
 
