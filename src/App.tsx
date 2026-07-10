@@ -255,6 +255,55 @@ export default function App() {
           </div>
         </section>
 
+        {/* Global Automation Controls */}
+        <section className="mb-10 animate-fade-in" style={{ animationDelay: '100ms' }}>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-black text-white tracking-tight flex items-center">
+              <Settings className="w-5 h-5 mr-2 text-indigo-400" />
+              Điều khiển tự động hóa toàn cục
+            </h2>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+              <button
+                onClick={() => queues.forEach(q => handleQueueControl(q.guildId, 'pause'))}
+                className="flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 transition cursor-pointer text-slate-300 hover:text-white"
+              >
+                <Pause className="w-6 h-6 mb-2 text-amber-400" />
+                <span className="text-xs font-bold text-center">Tạm dừng tất cả</span>
+              </button>
+              <button
+                onClick={() => queues.forEach(q => handleQueueControl(q.guildId, 'resume'))}
+                className="flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 transition cursor-pointer text-slate-300 hover:text-white"
+              >
+                <Play className="w-6 h-6 mb-2 text-emerald-400" />
+                <span className="text-xs font-bold text-center">Tiếp tục tất cả</span>
+              </button>
+              <button
+                onClick={() => queues.forEach(q => handleQueueControl(q.guildId, 'autoplay', true))}
+                className="flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 transition cursor-pointer text-slate-300 hover:text-white"
+              >
+                <RefreshCw className="w-6 h-6 mb-2 text-blue-400" />
+                <span className="text-xs font-bold text-center">Bật Autoplay All</span>
+              </button>
+              <button
+                onClick={() => queues.forEach(q => handleQueueControl(q.guildId, '247', true))}
+                className="flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 transition cursor-pointer text-slate-300 hover:text-white"
+              >
+                <Clock className="w-6 h-6 mb-2 text-indigo-400" />
+                <span className="text-xs font-bold text-center">Bật 24/7 All</span>
+              </button>
+              <button
+                onClick={() => queues.forEach(q => handleQueueControl(q.guildId, 'stop'))}
+                className="flex flex-col items-center justify-center p-4 rounded-2xl bg-rose-950/40 hover:bg-rose-900/60 border border-rose-900/50 transition cursor-pointer text-rose-300 hover:text-white"
+              >
+                <Trash2 className="w-6 h-6 mb-2" />
+                <span className="text-xs font-bold text-center">Xóa & Dừng All</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
         {/* Tab content view 1: Playback & Status */}
         {activeTab === 'status' && (
           <div className="space-y-8">

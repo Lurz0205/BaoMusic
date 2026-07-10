@@ -47,9 +47,13 @@ export const playCommand = {
     }
 
     try {
+      // 1. YouTube-SR suggestions (fastest)
       // Use youtube-sr suggestions for autocomplete as it is extremely robust and fast
-      // Suggestions are usually just strings, which is exactly what we want for autocomplete
-      const suggestions = await YouTube.getSuggestions(focusedValue);
+      // Wrapped in Promise.race with a 2-second timeout so it never exceeds Discord's 3-second limit.
+      const timeoutPromise = new Promise<string[]>((resolve) => setTimeout(() => resolve([]), 2000));
+      const suggestionsPromise = YouTube.getSuggestions(focusedValue);
+      const suggestions = await Promise.race([suggestionsPromise, timeoutPromise]);
+
       
       const choices = suggestions.slice(0, 25).map((query) => {
         const title = typeof query === 'string' ? query : (query.title || 'Unknown');
@@ -71,27 +75,26 @@ export const playCommand = {
   },
 
   async execute(interaction: ChatInputCommandInteraction) {
+    await interaction.deferReply();
+
     const member = interaction.member as GuildMember;
     const voiceChannel = member?.voice?.channel;
 
     if (!voiceChannel) {
-      return interaction.reply({
-        content: '❌ Bạn phải ở trong một kênh thoại (voice channel) để yêu cầu phát nhạc!',
-        ephemeral: true,
+      return interaction.editReply({
+        content: '❌ Bạn phải ở trong một kênh thoại (voice channel) để yêu cầu phát nhạc!'
       });
     }
 
     const botMember = interaction.guild?.members.me;
     if (botMember && !voiceChannel.permissionsFor(botMember).has(['Connect', 'Speak'])) {
-      return interaction.reply({
-        content: '❌ Bot không có quyền truy cập (`Connect`) hoặc quyền nói (`Speak`) trong kênh thoại của bạn!',
-        ephemeral: true,
+      return interaction.editReply({
+        content: '❌ Bot không có quyền truy cập (`Connect`) hoặc quyền nói (`Speak`) trong kênh thoại của bạn!'
       });
     }
 
     const input = interaction.options.getString('input', true);
     const platform = interaction.options.getString('platform') || 'youtube';
-    await interaction.deferReply();
 
     try {
       // Connect/Retrieve voice connection
