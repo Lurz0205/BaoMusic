@@ -29,6 +29,7 @@ export interface QueueState {
   is247: boolean;
   channelName: string | null;
   voiceChannelId: string | null;
+  playbackDuration: number;
 }
 
 export interface BotStatus {

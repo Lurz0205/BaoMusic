@@ -14,6 +14,7 @@ export function registerInteractionCreateEvent(client: Client) {
 
       try {
         logger.info(`Executing command: /${interaction.commandName} by ${interaction.user.tag} in "${interaction.guild?.name || 'DM'}"`);
+        if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ ephemeral: false });
         await command.execute(interaction).catch((e: any) => { throw e; });
       } catch (err: any) {
         logger.error(`Error executing command /${interaction.commandName}:`, err);

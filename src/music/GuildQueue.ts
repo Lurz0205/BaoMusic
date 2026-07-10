@@ -37,6 +37,8 @@ export class GuildQueue {
   private isDisconnecting = false;
   private reconnectTimeout?: NodeJS.Timeout;
 
+  public playbackDuration = 0;
+  
   constructor(
     guildId: string,
     guildName: string,
@@ -57,7 +59,16 @@ export class GuildQueue {
 
     this.setupPlayerListeners();
     this.setupConnectionListeners();
+    
+    // Start tracking duration
+    setInterval(() => {
+      if (this.player.state.status === AudioPlayerStatus.Playing) {
+        this.playbackDuration++;
+      }
+    }, 1000);
   }
+[diff_block_end]
+
 
   /**
    * Set up voice connection status listeners to handle disconnects and reconnects gracefully.
@@ -138,6 +149,7 @@ export class GuildQueue {
       }
 
       this.currentTrack = this.tracks[0];
+      this.playbackDuration = 0;
       logger.music(`Generating stream for: "${this.currentTrack.title}"`, 'play');
       
       const resource = await this.currentTrack.createAudioResource();
@@ -429,6 +441,14 @@ export class GuildQueue {
   }
 
   /**
+   * Set Autoplay mode
+   */
+  public setAutoplay(enable: boolean): void {
+    this.autoplay = enable;
+    logger.music(`Autoplay ${enable ? 'enabled' : 'disabled'} in "${this.guildName}"`, 'autoplay');
+  }
+
+  /**
    * Seek playback (if play-dl seek is possible by re-requesting stream)
    */
   public async seek(seconds: number): Promise<boolean> {
@@ -506,6 +526,7 @@ export class GuildQueue {
       is247: this.is247,
       channelName: this.channelName,
       voiceChannelId: this.voiceChannelId,
+      playbackDuration: this.playbackDuration,
     };
   }
 }

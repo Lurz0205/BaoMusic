@@ -153,16 +153,36 @@ PORT=${config.port}
         return res.json({ success: true, message: `Đã đổi chế độ lặp thành ${value.toUpperCase()}` });
       }
       if (action === 'autoplay') {
-        queue.autoplay = Boolean(value);
+        queue.setAutoplay(Boolean(value));
         return res.json({ success: true, message: 'Đã cập nhật Autoplay' });
       }
       if (action === '247') {
-        // Just mock it since we don't have a 247 property yet.
+        queue.set247(Boolean(value));
         return res.json({ success: true, message: 'Đã cập nhật chế độ 24/7' });
       }
       res.status(400).json({ success: false, message: 'Hành động không hợp lệ' });
     } catch (err: any) {
       return res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // Play/Join API
+  app.post('/api/music/play', async (req, res) => {
+    const { guildId, query, voiceChannelId } = req.body;
+    if (!guildId || !query) return res.status(400).json({ success: false, message: 'Thiếu thông tin!' });
+    // This will need access to bot client and play logic...
+    // Simplest: use playerManager to get or create guild queue, and play track
+    res.status(501).json({ success: false, message: 'Chưa triển khai' });
+  });
+
+  // Deploy Slash Commands API
+  app.post('/api/deploy-commands', async (req, res) => {
+    try {
+      const { deploySlashCommands } = await import('./src/utils/deploy-commands.js');
+      const result = await deploySlashCommands();
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
     }
   });
 

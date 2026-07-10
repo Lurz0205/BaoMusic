@@ -19,9 +19,8 @@ export const voice247Command = {
   async execute(interaction: ChatInputCommandInteraction) {
     const queue = playerManager.get(interaction.guildId || '');
     if (!queue) {
-      return interaction.reply({
+      return interaction.editReply({
         content: '❌ Bot phải ở trong một kênh thoại để kích hoạt chế độ này! Gõ `/join` hoặc `/play` trước.',
-        ephemeral: true,
       });
     }
 
@@ -30,7 +29,7 @@ export const voice247Command = {
     
     queue.set247(enable);
 
-    await interaction.reply({
+    await interaction.editReply({
       content: `📌 Chế độ treo phòng **24/7** đã được: **${enable ? '🟢 KÍCH HOẠT' : '🔴 HỦY KÍCH HOẠT'}** cho máy chủ này!`,
     });
   }

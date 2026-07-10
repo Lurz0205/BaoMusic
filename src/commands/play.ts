@@ -75,8 +75,6 @@ export const playCommand = {
   },
 
   async execute(interaction: ChatInputCommandInteraction) {
-    await interaction.deferReply().catch((e) => logger.warn("Failed to defer reply: " + e.message));
-
     const member = interaction.member as GuildMember;
     const voiceChannel = member?.voice?.channel;
 
@@ -154,7 +152,7 @@ export const playCommand = {
           embed.setThumbnail(tracks[0].thumbnail);
         }
 
-        await interaction.editReply({ embeds: [embed] }).catch(e => logger.warn("Failed to edit reply: " + e.message));
+        await interaction.editReply({ embeds: [embed] });
       } else {
         // Single track added embed
         const track = tracks[0];
@@ -177,11 +175,11 @@ export const playCommand = {
           embed.setThumbnail(track.thumbnail);
         }
 
-        await interaction.editReply({ embeds: [embed] }).catch(e => logger.warn("Failed to edit reply: " + e.message));
+        await interaction.editReply({ embeds: [embed] });
       }
     } catch (err: any) {
       logger.error('Error in /play command execution:', err);
-      await interaction.editReply(`❌ Gặp sự cố khi xử lý bài hát: **${err.message || err}**`).catch(e => logger.warn("Failed to edit reply: " + e.message));
+      await interaction.editReply(`❌ Gặp sự cố khi xử lý bài hát: **${err.message || err}**`);
     }
   }
 };
