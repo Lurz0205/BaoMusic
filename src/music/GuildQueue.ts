@@ -48,7 +48,9 @@ export class GuildQueue {
   private nowPlayingMessage: Message | null = null;
   public playbackDuration = 0;
   private isProcessing = false;
+  private isMessaging = false;
   private lastMessageTrackUrl: string | null = null;
+  private lastMessageTime = 0;
   private playbackInterval: NodeJS.Timeout | null = null;
   
   private isTransitioningPrevious = false;
@@ -214,10 +216,14 @@ export class GuildQueue {
       logger.success(`Now playing "${this.currentTrack.title}" in "${this.guildName}"`);
 
       // Prevent sending double messages for the same track
-      if (this.lastMessageTrackUrl === this.currentTrack.url && this.nowPlayingMessage) {
+      const now = Date.now();
+      if (this.isMessaging || (this.lastMessageTrackUrl === this.currentTrack.url && (now - this.lastMessageTime < 5000))) {
         return;
       }
+      
+      this.isMessaging = true;
       this.lastMessageTrackUrl = this.currentTrack.url;
+      this.lastMessageTime = now;
 
       // Delete the old "now playing" message first
       await this.setNowPlayingMessage(null);
@@ -269,6 +275,8 @@ export class GuildQueue {
         }
       } catch (msgErr) {
         logger.error('Failed to send Now Playing embed to channel:', msgErr);
+      } finally {
+        this.isMessaging = false;
       }
     } catch (err: any) {
       logger.error(`Error initiating playback in "${this.guildName}":`, err);
@@ -303,24 +311,25 @@ export class GuildQueue {
     if (this.loopMode === 'track') {
       // Re-play the same track
       logger.music(`Loop active (track): re-playing "${this.currentTrack.title}"`, 'loop');
-      this.play();
+      await this.play();
     } else if (this.loopMode === 'queue') {
       // Move current track to bottom of queue
       const played = this.tracks.shift();
       if (played) this.tracks.push(played);
       
       if (this.tracks.length > 0) {
-        this.play();
+        await this.play();
       } else {
         this.currentTrack = null;
         this.currentResource = null;
+        if (!this.is247) this.startIdleLeaveTimer();
       }
     } else {
       // Normal: play next
       this.tracks.shift();
       
       if (this.tracks.length > 0) {
-        this.play();
+        await this.play();
       } else if (this.autoplay) {
         // Queue ended, attempt autoplay fetch
         await this.handleAutoplay();

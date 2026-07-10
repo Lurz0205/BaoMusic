@@ -7,30 +7,29 @@ export function registerInteractionCreateEvent(client: Client) {
   client.on('interactionCreate', async (interaction: Interaction) => {
     // 1. Button interactions
     if (interaction.isButton()) {
+      try {
+        await interaction.deferUpdate().catch(() => null);
+      } catch {}
+
       const queue = playerManager.get(interaction.guildId || '');
-      if (!queue) return interaction.reply({ content: '❌ Không có hàng đợi nhạc!', ephemeral: true });
+      if (!queue) return;
 
       switch (interaction.customId) {
         case 'control_skip':
           queue.skip();
-          try { await interaction.deferUpdate(); } catch {}
           break;
         case 'control_pause_resume':
           if (queue.player.state.status === 'playing') queue.pause();
           else queue.resume();
-          try { await interaction.deferUpdate(); } catch {}
           break;
         case 'control_previous':
           queue.previous();
-          try { await interaction.deferUpdate(); } catch {}
           break;
         case 'control_volume_up':
           queue.setVolume(Math.min(queue.volume + 10, 100));
-          try { await interaction.deferUpdate(); } catch {}
           break;
         case 'control_volume_down':
           queue.setVolume(Math.max(queue.volume - 10, 0));
-          try { await interaction.deferUpdate(); } catch {}
           break;
         case 'control_loop': {
           const modes: ('off' | 'track' | 'queue')[] = ['off', 'track', 'queue'];
@@ -43,10 +42,12 @@ export function registerInteractionCreateEvent(client: Client) {
           if (queue.loopMode === 'track') modeViet = 'Lặp 1 bài (Track)';
           if (queue.loopMode === 'queue') modeViet = 'Lặp cả hàng chờ (Queue)';
 
-          await interaction.reply({
-            content: `🔄 Đã chuyển chế độ lặp sang: **${modeViet}**!`,
-            ephemeral: true
-          });
+          try {
+            await interaction.followUp({
+              content: `🔄 Đã chuyển chế độ lặp sang: **${modeViet}**!`,
+              ephemeral: true
+            });
+          } catch {}
           break;
         }
       }
