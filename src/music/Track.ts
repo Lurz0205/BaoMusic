@@ -109,9 +109,13 @@ export class Track implements TrackData {
     // 1. Check if the input is a Spotify link
     if (cleanInput.includes('spotify.com')) {
       try {
-        if (play.is_expired()) {
-          logger.info('Spotify token is expired or not loaded. Refreshing Spotify token...');
-          await play.refreshToken();
+        try {
+          if (play.is_expired()) {
+            logger.info('Spotify token is expired or not loaded. Refreshing Spotify token...');
+            await play.refreshToken();
+          }
+        } catch (err: any) {
+          logger.warn(`Failed to refresh Spotify token (non-fatal): ${err.message || err}`);
         }
         const spotifyData = await play.spotify(cleanInput);
         if (spotifyData.type === 'playlist' || spotifyData.type === 'album') {

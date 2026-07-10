@@ -48,6 +48,7 @@ export class GuildQueue {
   private nowPlayingMessage: Message | null = null;
   public playbackDuration = 0;
   private isProcessing = false;
+  private lastMessageTrackUrl: string | null = null;
   private playbackInterval: NodeJS.Timeout | null = null;
   
   private isTransitioningPrevious = false;
@@ -78,12 +79,16 @@ export class GuildQueue {
     
     // Start tracking duration
     this.playbackInterval = setInterval(() => {
-      if (this.player.state.status === AudioPlayerStatus.Playing && this.currentResource) {
-        this.playbackDuration = Math.floor(this.currentResource.playbackDuration / 1000);
-      } else if (this.player.state.status === AudioPlayerStatus.Idle) {
+      const state = this.player.state;
+      if (state.status === AudioPlayerStatus.Playing) {
+        const resource = (state as any).resource;
+        if (resource) {
+          this.playbackDuration = Math.floor(resource.playbackDuration / 1000);
+        }
+      } else if (state.status === AudioPlayerStatus.Idle) {
         this.playbackDuration = 0;
       }
-    }, 500);
+    }, 1000);
   }
 
   public async setNowPlayingMessage(message: Message | null): Promise<void> {
@@ -208,6 +213,12 @@ export class GuildQueue {
       this.player.play(resource);
       logger.success(`Now playing "${this.currentTrack.title}" in "${this.guildName}"`);
 
+      // Prevent sending double messages for the same track
+      if (this.lastMessageTrackUrl === this.currentTrack.url && this.nowPlayingMessage) {
+        return;
+      }
+      this.lastMessageTrackUrl = this.currentTrack.url;
+
       // Delete the old "now playing" message first
       await this.setNowPlayingMessage(null);
 
@@ -278,6 +289,7 @@ export class GuildQueue {
 
     if (this.isTransitioningPrevious) {
       this.isTransitioningPrevious = false;
+      this.lastMessageTrackUrl = null; // Force new message for previous track
       this.play();
       return;
     }
@@ -285,6 +297,8 @@ export class GuildQueue {
     // Save to previous tracks
     this.previousTracks.push(this.currentTrack);
     if (this.previousTracks.length > 20) this.previousTracks.shift();
+
+    this.lastMessageTrackUrl = null;
 
     if (this.loopMode === 'track') {
       // Re-play the same track
@@ -531,6 +545,7 @@ export class GuildQueue {
     this.previousTracks = [];
     this.currentTrack = null;
     this.currentResource = null;
+    this.lastMessageTrackUrl = null;
     this.player.stop();
     this.clearIdleLeaveTimer();
   }
