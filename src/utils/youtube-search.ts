@@ -79,20 +79,21 @@ function buildYtDlpArgs(baseArgs: string[]): string[] {
   args.push('--referer', 'https://www.youtube.com/');
   args.push('--add-header', 'Accept-Language:en-US,en;q=0.9');
 
-  // Build extractor args correctly by combining them
-  // Putting tv, tvhtml5, android and ios clients first as they are often more permissive
-  const extractorArgsParts = ['youtube:player-client=tv,tvhtml5,android,ios,mweb,web'];
-  
+  // Build extractor args
+  // Use android and ios as primary clients as they are often more permissive for bot checks
+  const extractorArgs = [
+    'youtube:player-client=android,ios,mweb,web',
+  ];
+
   if (poToken) {
-    // Format required: web+TOKEN for web client, but po_token works for others too
     const formattedPoToken = poToken.startsWith('web+') ? poToken : `web+${poToken}`;
-    args.push('--extractor-args', `youtube:po_token=${formattedPoToken}`);
+    extractorArgs.push(`po_token=${formattedPoToken}`);
     if (visitorData) {
-      args.push('--extractor-args', `youtube:visitor_data=${visitorData}`);
+      extractorArgs.push(`visitor_data=${visitorData}`);
     }
   }
-  
-  args.push('--extractor-args', extractorArgsParts.join(';'));
+
+  args.push('--extractor-args', extractorArgs.join(';'));
 
   const proxy = process.env.YT_PROXY;
   if (proxy) {
@@ -145,7 +146,24 @@ export async function runYtDlp(args: string[]): Promise<string> {
  * Uses play-dl primarily for speed, falls back to yt-dlp if needed.
  */
 export async function searchYouTube(query: string, limit: number = 5): Promise<YouTubeSearchResult[]> {
-  // Try youtube-sr first (robust and fast for search)
+  // Try play-dl first (much more reliable for full search)
+  try {
+    const playResults = await play.search(query, { limit, source: { youtube: 'video' } });
+    if (playResults && playResults.length > 0) {
+      return playResults.map(v => ({
+        id: v.id || '',
+        title: v.title || 'Unknown Title',
+        url: v.url,
+        thumbnail: v.thumbnails[0]?.url || '',
+        duration: v.durationInSec,
+        durationString: v.durationRaw || formatDuration(v.durationInSec)
+      }));
+    }
+  } catch (err: any) {
+    logger.warn(`play-dl search failed, trying youtube-sr fallback: ${err.message || err}`);
+  }
+
+  // Fallback to youtube-sr
   try {
     const srResults = await YouTube.search(query, { limit, type: 'video' });
     if (srResults && srResults.length > 0) {
@@ -162,24 +180,7 @@ export async function searchYouTube(query: string, limit: number = 5): Promise<Y
     logger.warn(`youtube-sr search failed: ${err.message || err}`);
   }
 
-  // Fallback to play-dl
-  try {
-    const playResults = await play.search(query, { limit, source: { youtube: 'video' } });
-    if (playResults && playResults.length > 0) {
-      return playResults.map(v => ({
-        id: v.id || '',
-        title: v.title || 'Unknown Title',
-        url: v.url,
-        thumbnail: v.thumbnails[0]?.url || '',
-        duration: v.durationInSec,
-        durationString: v.durationRaw || formatDuration(v.durationInSec)
-      }));
-    }
-  } catch (err: any) {
-    logger.warn(`play-dl search failed, falling back to yt-dlp: ${err.message || err}`);
-  }
-
-  // Fallback to yt-dlp
+  // Fallback to yt-dlp search if others fail
   try {
     const baseArgs = [
       `ytsearch${limit}:${query}`,
@@ -369,10 +370,19 @@ export async function spawnStream(url: string): Promise<Readable> {
   if (url.includes('youtube.com') || url.includes('youtu.be')) {
     try {
       logger.info(`Attempting play-dl stream for YouTube URL: ${url}`);
-      const stream = await play.stream(url, {
+      
+      // Try to use po_token if available in environment
+      const poToken = process.env.YT_PO_TOKEN;
+      const visitorData = process.env.YT_VISITOR_DATA;
+      
+      const streamOptions: any = {
         quality: 2,
-        discordPlayerCompatibility: true
-      });
+        discordPlayerCompatibility: true,
+        // play-dl allows passing custom cookies and useragent via its global setToken,
+        // but we can also try to ensure it uses the best possible headers.
+      };
+      
+      const stream = await play.stream(url, streamOptions);
       logger.success(`Successfully started play-dl stream for: ${url}`);
       return stream.stream;
     } catch (err: any) {

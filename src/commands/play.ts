@@ -35,22 +35,22 @@ export const playCommand = {
     }
 
     try {
-      // Use youtube-sr for autocomplete as it is robust and fast
-      // Discord requires response within 3 seconds.
-      const searchResults = await YouTube.search(focusedValue, { limit: 10, type: 'video' });
+      // Use youtube-sr suggestions for autocomplete as it is extremely robust and fast
+      // Suggestions are usually just strings, which is exactly what we want for autocomplete
+      const suggestions = await YouTube.getSuggestions(focusedValue);
       
-      const choices = searchResults.slice(0, 25).map((video) => {
-        const title = video.title || 'Unknown Title';
+      const choices = suggestions.slice(0, 25).map((query) => {
+        const title = typeof query === 'string' ? query : (query.title || 'Unknown');
         const formattedTitle = title.length > 95 ? title.slice(0, 92) + '...' : title;
         return {
-          name: `${formattedTitle} (${video.durationFormatted || 'Live'})`,
-          value: video.url,
+          name: formattedTitle,
+          value: title, // Value will be the query string, which /play handles fine
         };
       });
-
+      
       await interaction.respond(choices);
     } catch (err: any) {
-      logger.warn('Autocomplete via youtube-sr failed:', err.message || err);
+      logger.warn('Autocomplete via youtube-sr suggestions failed:', err.message || err);
       // Fail silently for interaction
       try {
         await interaction.respond([]);

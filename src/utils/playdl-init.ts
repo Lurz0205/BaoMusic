@@ -107,12 +107,9 @@ export async function initPlayDL() {
         await play.setToken({
           youtube: {
             cookie: cleanedCookie
-          },
-          useragent: [
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
-          ]
+          }
         });
-        logger.success('Play-DL initialized successfully with custom youtube cookies and Chrome User-Agent.');
+        logger.success('Play-DL initialized successfully with custom youtube cookies.');
       } else {
         logger.warn('Cookie file is empty or could not be parsed. Play-DL starting without cookies.');
       }
