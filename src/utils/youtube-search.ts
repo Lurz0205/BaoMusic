@@ -17,6 +17,19 @@ export interface YouTubeSearchResult {
 const ROOT_DIR = process.cwd();
 const YTDLP_PATH = path.join(ROOT_DIR, 'bin', 'yt-dlp');
 
+// Proactively fix permissions for yt-dlp if needed (common issue on cloud hosts)
+if (fs.existsSync(YTDLP_PATH)) {
+  try {
+    const stats = fs.statSync(YTDLP_PATH);
+    if ((stats.mode & fs.constants.S_IXUSR) === 0) {
+      logger.info('Fixing execution permissions for yt-dlp binary...');
+      fs.chmodSync(YTDLP_PATH, 0o755);
+    }
+  } catch (err) {
+    logger.warn('Failed to fix yt-dlp permissions proactively:', err);
+  }
+}
+
 // Hardcoded PO Token & Visitor Data for fallback/default usage
 const DEFAULT_PO_TOKEN = 'MlWhNcrk5yPATaELnTfvHxmyJKakOlVFwds0rub0sf7WS0SCCaIK9dL';
 const DEFAULT_VISITOR_DATA = 'CgtQSEdTMU5EWEt2VSjt58DSBjIKCgJWThIEGgAgEmLfAgrcAjE5LllUPU5kSGFaU3M3VmdhT243NnIzdFk2aW1kNHB6aWdCTFpueVJ6NkkyMnpDUmFrQ0xfdGlRUk0zTWJiNEFVem1xNk1wS1A2d3BLMGVTQnJjREtmZlVxMEJHY0N3WWMwU0NnYWw0MVJUUkJERW9wVXpQRFBONV93aHZ3Wl9kdDgxWndSZUEzWUt3UzIybWRWbjFWVEtIYXpCazMzNTZhelhyUklMakU2Mmx2aU5UR3VYWVI2cFFaYXM2OHJyeW1wOTJOcTNzTVBXekdBaHg2eVJkYWh4UnQ5bHN5d3MzNGlwR0RZRXVtaHFxcXlwVnFyQU83Q1dHMFRJeFBISXNQUGNXWHNLOG5QSS10SjR5dE5nWTBIWDh3aVBkVGVjbGNVazNKMXQ5bFZPa05fS3AzYWlFOTdULVNlYUNFR3d4dlNUbU5rUHphUGhEdDRCQkJfS1FKOGpGbE16UQ';
