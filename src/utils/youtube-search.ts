@@ -21,7 +21,7 @@ const YTDLP_PATH = path.join(ROOT_DIR, 'bin', 'yt-dlp');
 
 /**
  * Đảm bảo yt-dlp tồn tại và có quyền thực thi.
- * Luôn kiểm tra và tải bản mới nhất nếu bản cũ đã lỗi thời.
+ * Luôn tải bản mới nhất để tránh lỗi bot detection.
  */
 async function ensureYtDlp(): Promise<string> {
   const binDir = path.join(ROOT_DIR, 'bin');
@@ -29,38 +29,31 @@ async function ensureYtDlp(): Promise<string> {
     fs.mkdirSync(binDir, { recursive: true });
   }
 
-  // Force re-download to ensure latest version periodically or if missing
   const stats = fs.existsSync(YTDLP_PATH) ? fs.statSync(YTDLP_PATH) : null;
-  // If older than 12 hours or missing, re-download
-  const shouldDownload = !stats || (Date.now() - stats.mtimeMs > 12 * 60 * 60 * 1000);
+  // Kiểm tra nếu binary quá cũ (6 giờ) thì tải mới để đảm bảo có bản vá mới nhất từ cộng đồng
+  const shouldDownload = !stats || (Date.now() - stats.mtimeMs > 6 * 60 * 60 * 1000);
   
   if (shouldDownload) {
-    logger.info('Downloading/Updating latest yt-dlp binary (ELF linux)...');
+    logger.info('Updating yt-dlp binary to the latest version...');
     const url = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux';
     try {
       execSync(`curl -L ${url} -o "${YTDLP_PATH}"`, { stdio: 'inherit' });
       fs.chmodSync(YTDLP_PATH, 0o755);
+      // Run internal update just in case the release was a few hours old
+      execSync(`"${YTDLP_PATH}" -U`, { stdio: 'ignore' });
     } catch (err) {
-      logger.error('Failed to download yt-dlp:', err);
+      logger.error('Failed to update yt-dlp:', err);
       if (!fs.existsSync(YTDLP_PATH)) {
-        throw new Error('Could not download yt-dlp. Please install it manually in ./bin/yt-dlp');
+        throw new Error('Could not download yt-dlp binary.');
       }
     }
-  } else {
-    // Attempt self-update if possible
-    try {
-      execSync(`"${YTDLP_PATH}" -U`, { stdio: 'ignore' });
-    } catch {
-      // Ignore update errors
-    }
-    fs.chmodSync(YTDLP_PATH, 0o755);
   }
 
   return YTDLP_PATH;
 }
 
 /**
- * Helper to build yt-dlp arguments with cookies and PO Token
+ * Helper to build yt-dlp arguments with cookies and optimized headers
  */
 function buildYtDlpArgs(baseArgs: string[]): string[] {
   const args = [...baseArgs];
@@ -68,46 +61,39 @@ function buildYtDlpArgs(baseArgs: string[]): string[] {
   if (config.hasCookies) {
     const resolvedPath = config.absoluteCookiePath;
     if (fs.existsSync(resolvedPath)) {
-      const stats = fs.statSync(resolvedPath);
-      logger.info(`Using cookies from ${resolvedPath} (Size: ${stats.size} bytes)`);
       args.push('--cookies', resolvedPath);
     }
   }
 
-  const poToken = process.env.YT_PO_TOKEN;
-  const visitorData = process.env.YT_VISITOR_DATA;
-
-  // Use a modern iOS User-Agent to match the player-client for better reliability
-  const userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
+  // Use a modern User-Agent
+  const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
   args.push('--user-agent', userAgent);
   args.push('--force-ipv4');
   args.push('--no-check-certificates');
   args.push('--geo-bypass');
   args.push('--referer', 'https://www.youtube.com/');
   args.push('--add-header', 'Accept-Language:en-US,en;q=0.9');
-
-  // Build extractor args
-  // Use a mix of clients that are less likely to be blocked
-  // tv_downgraded and web_creator often work when ios/android fail for some videos
+  args.push('--no-cache-dir');
+  
+  // Use specific extractor args for better compatibility
+  // Prioritize clients that are less likely to be blocked
   const extractorArgs = [
-    'youtube:player-client=ios,android,mweb,tv_downgraded,web',
+    'youtube:player-client=ios,android,tvhtml5,mweb',
     'youtube:player_skip=configs,webpage'
   ];
 
+  const poToken = process.env.YT_PO_TOKEN;
   if (poToken) {
     const formattedPoToken = poToken.startsWith('web+') ? poToken : `web+${poToken}`;
     extractorArgs.push(`po_token=${formattedPoToken}`);
-    if (visitorData) {
-      extractorArgs.push(`visitor_data=${visitorData}`);
-    }
+    const visitorData = process.env.YT_VISITOR_DATA;
+    if (visitorData) extractorArgs.push(`visitor_data=${visitorData}`);
   }
 
   args.push('--extractor-args', extractorArgs.join(';'));
   
   const proxy = process.env.YT_PROXY;
-  if (proxy) {
-    args.push('--proxy', proxy);
-  }
+  if (proxy) args.push('--proxy', proxy);
 
   return args;
 }
@@ -135,11 +121,16 @@ function formatDuration(durationSec: number): string {
 export async function runYtDlp(args: string[]): Promise<string> {
   const binaryPath = await ensureYtDlp();
   return new Promise((resolve, reject) => {
-    logger.info(`Running yt-dlp command: "${binaryPath} ${args.map(a => a.includes(' ') ? `"${a}"` : a).join(' ')}"`);
+    // Only log essential info to avoid clutter
+    const debugArgs = args.filter(a => !a.includes('cookie') && !a.includes('token'));
+    logger.info(`Running yt-dlp search/metadata command...`);
+    
     execFile(binaryPath, args, { maxBuffer: 15 * 1024 * 1024 }, (error, stdout, stderr) => {
+      if (stderr && (stderr.includes('Sign in') || stderr.includes('bot'))) {
+        logger.error(`yt-dlp detected as bot! Output: ${stderr.trim()}`);
+      }
+      
       if (error) {
-        logger.warn(`yt-dlp warning/error output: ${stderr || error.message}`);
-        // Even if there's a minor error exit code, if we have valid stdout, use it
         if (stdout.trim()) {
           return resolve(stdout);
         }
