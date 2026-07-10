@@ -88,12 +88,16 @@ export default function App() {
       ]);
 
       if (statusRes.ok) setStatus(await statusRes.json());
+      else console.error('statusRes not ok', statusRes.status);
       if (queuesRes.ok) setQueues(await queuesRes.json());
+      else console.error('queuesRes not ok', queuesRes.status);
       if (configRes.ok) {
         const conf = await configRes.json();
         setConfig(conf);
       }
+      else console.error('configRes not ok', configRes.status);
       if (guildsRes.ok) setGuilds(await guildsRes.json());
+      else console.error('guildsRes not ok', guildsRes.status);
     } catch (err) {
       console.error('Failed to fetch data from Express backend:', err);
     }
@@ -240,9 +244,12 @@ export default function App() {
             <div className="space-y-1">
               <span className="text-xs text-slate-400 font-semibold tracking-wider uppercase">Kết nối bot</span>
               <div className="flex items-center space-x-2">
-                <span className={`w-2.5 h-2.5 rounded-full ${status?.online ? 'bg-emerald-400 animate-ping shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-rose-500'}`} />
+                <span className={`w-2.5 h-2.5 rounded-full ${
+                  status === null ? 'bg-amber-400' : 
+                  status.online ? 'bg-emerald-400 animate-ping shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-rose-500'
+                }`} />
                 <h3 className="text-base font-bold text-white">
-                  {status?.online ? `@${status.username}` : 'Chưa kết nối'}
+                  {status === null ? 'Đang tải...' : status.online ? `@${status.username}` : 'Chưa kết nối'}
                 </h3>
               </div>
             </div>

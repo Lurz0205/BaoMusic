@@ -103,7 +103,9 @@ PORT=${config.port}
 
   // Check current status of the bot client
   app.get('/api/status', (req, res) => {
-    res.json(getBotStatus());
+    const status = getBotStatus();
+    logger.info(`Status requested: ${JSON.stringify(status)}`);
+    res.json(status);
   });
 
   app.post('/api/restart-bot', async (req, res) => {

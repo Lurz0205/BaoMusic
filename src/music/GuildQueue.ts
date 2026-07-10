@@ -62,8 +62,8 @@ export class GuildQueue {
     
     // Start tracking duration
     setInterval(() => {
-      if (this.player.state.status === AudioPlayerStatus.Playing) {
-        this.playbackDuration++;
+      if (this.player.state.status === AudioPlayerStatus.Playing && this.currentResource) {
+        this.playbackDuration = Math.floor(this.currentResource.playbackDuration / 1000);
       }
     }, 1000);
   }
@@ -361,6 +361,7 @@ export class GuildQueue {
    */
   public setVolume(vol: number): void {
     this.volume = Math.max(0, Math.min(100, vol));
+    logger.music(`setVolume called with ${vol}%, currentResource.volume: ${!!this.currentResource?.volume}`, 'volume');
     if (this.currentResource?.volume) {
       // AudioResource volume is scale 0-1, linear or logarithmic
       this.currentResource.volume.setVolume(this.volume / 100);

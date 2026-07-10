@@ -14,8 +14,22 @@ export function registerInteractionCreateEvent(client: Client) {
 
       try {
         logger.info(`Executing command: /${interaction.commandName} by ${interaction.user.tag} in "${interaction.guild?.name || 'DM'}"`);
-        if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ ephemeral: false });
-        await command.execute(interaction).catch((e: any) => { throw e; });
+        if (!interaction.deferred && !interaction.replied) {
+          try {
+            await interaction.deferReply({ ephemeral: false });
+          } catch (e) {
+            logger.error('Failed to defer interaction:', e);
+            throw e;
+          }
+        }
+        const wrappedInteraction = Object.create(interaction);
+        wrappedInteraction.reply = async (options: any) => {
+          if (interaction.deferred || interaction.replied) {
+            return interaction.editReply(options);
+          }
+          return interaction.reply(options);
+        };
+        await command.execute(wrappedInteraction).catch((e: any) => { throw e; });
       } catch (err: any) {
         logger.error(`Error executing command /${interaction.commandName}:`, err);
         
