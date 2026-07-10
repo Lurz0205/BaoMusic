@@ -62,24 +62,42 @@ export function registerInteractionCreateEvent(client: Client) {
       }
 
       try {
-        logger.info(`Executing command: /${interaction.commandName} by ${interaction.user.tag} in "${interaction.guild?.name || 'DM'}"`);
+        // Defer as quickly as possible to avoid 3s timeout
         if (!interaction.deferred && !interaction.replied) {
           try {
             await interaction.deferReply({ ephemeral: false });
-          } catch (e) {
-            logger.error('Failed to defer interaction:', e);
-            throw e;
+          } catch (deferErr: any) {
+            // If defer fails, it's likely already handled or timed out
+            logger.warn(`Failed to defer interaction for /${interaction.commandName}: ${deferErr.message}`);
           }
         }
-        const wrappedInteraction = Object.create(interaction);
+
+        logger.info(`Executing command: /${interaction.commandName} by ${interaction.user.tag} in "${interaction.guild?.name || 'DM'}"`);
+
+        // Monkey-patch reply to automatically use editReply if deferred
+        const originalReply = interaction.reply.bind(interaction);
+        const wrappedInteraction = interaction as any;
         wrappedInteraction.reply = async (options: any) => {
           if (interaction.deferred || interaction.replied) {
-            return interaction.editReply(options);
+            try {
+              return await interaction.editReply(options);
+            } catch (err) {
+              // If editReply fails, fallback to original reply if possible
+              if (!interaction.replied) return await originalReply(options);
+              throw err;
+            }
           }
-          return interaction.reply(options);
+          return await originalReply(options);
         };
-        await command.execute(wrappedInteraction).catch((e: any) => { throw e; });
+
+        await command.execute(wrappedInteraction);
       } catch (err: any) {
+        // Handle Unknown Interaction (10062) gracefully
+        if (err.code === 10062) {
+          logger.warn(`Command /${interaction.commandName} failed with Unknown Interaction (likely timed out)`);
+          return;
+        }
+
         logger.error(`Error executing command /${interaction.commandName}:`, err);
         
         const errorMessage = '❌ Có lỗi xảy ra khi thực hiện lệnh này!';
@@ -90,8 +108,10 @@ export function registerInteractionCreateEvent(client: Client) {
           } else {
             await interaction.reply({ content: errorMessage, ephemeral: true });
           }
-        } catch (replyErr) {
-          logger.error('Failed to reply to failed interaction:', replyErr);
+        } catch (replyErr: any) {
+          if (replyErr.code !== 10062 && replyErr.code !== 40060) {
+            logger.error('Failed to reply to failed interaction:', replyErr);
+          }
         }
       }
     }

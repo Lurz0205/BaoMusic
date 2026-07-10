@@ -79,8 +79,10 @@ export class GuildQueue {
     this.playbackInterval = setInterval(() => {
       if (this.player.state.status === AudioPlayerStatus.Playing && this.currentResource) {
         this.playbackDuration = Math.floor(this.currentResource.playbackDuration / 1000);
+      } else if (this.player.state.status === AudioPlayerStatus.Idle) {
+        this.playbackDuration = 0;
       }
-    }, 1000);
+    }, 500);
   }
 
   public async setNowPlayingMessage(message: Message | null): Promise<void> {
@@ -582,6 +584,7 @@ export class GuildQueue {
     this.clearIdleLeaveTimer();
     if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
     if (this.playbackInterval) clearInterval(this.playbackInterval);
+    this.playbackDuration = 0;
     
     this.tracks = [];
     this.previousTracks = [];
