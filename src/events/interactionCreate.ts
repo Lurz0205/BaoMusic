@@ -1,10 +1,46 @@
 import { Client, Interaction } from 'discord.js';
 import { commandsMap } from '../commands/index.js';
 import { logger } from '../utils/logger.js';
+import { playerManager } from '../music/PlayerManager.js';
 
 export function registerInteractionCreateEvent(client: Client) {
   client.on('interactionCreate', async (interaction: Interaction) => {
-    // 1. Slash Command Executions
+    // 1. Button interactions
+    if (interaction.isButton()) {
+      const queue = playerManager.get(interaction.guildId || '');
+      if (!queue) return interaction.reply({ content: '❌ Không có hàng đợi nhạc!', ephemeral: true });
+
+      switch (interaction.customId) {
+        case 'control_skip':
+          queue.skip();
+          await interaction.deferUpdate();
+          break;
+        case 'control_pause_resume':
+          if (queue.player.state.status === 'playing') queue.pause();
+          else queue.resume();
+          await interaction.deferUpdate();
+          break;
+        case 'control_previous':
+          queue.previous();
+          await interaction.deferUpdate();
+          break;
+        case 'control_volume_up':
+          queue.setVolume(Math.min(queue.volume + 10, 100));
+          await interaction.deferUpdate();
+          break;
+        case 'control_volume_down':
+          queue.setVolume(Math.max(queue.volume - 10, 0));
+          await interaction.deferUpdate();
+          break;
+        case 'control_loop':
+          // Need to add loop implementation in GuildQueue if not exists
+          await interaction.reply({ content: '🔁 Tính năng này đang được phát triển!', ephemeral: true });
+          break;
+      }
+      return;
+    }
+
+    // 2. Slash Command Executions
     if (interaction.isChatInputCommand()) {
       const command = commandsMap.get(interaction.commandName);
       if (!command) {

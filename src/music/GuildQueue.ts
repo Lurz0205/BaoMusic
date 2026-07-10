@@ -1,3 +1,4 @@
+import { Message } from 'discord.js';
 import {
   AudioPlayer,
   AudioPlayerStatus,
@@ -37,6 +38,7 @@ export class GuildQueue {
   private isDisconnecting = false;
   private reconnectTimeout?: NodeJS.Timeout;
 
+  private nowPlayingMessage: Message | null = null;
   public playbackDuration = 0;
   
   constructor(
@@ -66,6 +68,17 @@ export class GuildQueue {
         this.playbackDuration = Math.floor(this.currentResource.playbackDuration / 1000);
       }
     }, 1000);
+  }
+
+  public async setNowPlayingMessage(message: Message | null): Promise<void> {
+    if (this.nowPlayingMessage) {
+      try {
+        await this.nowPlayingMessage.delete();
+      } catch (error) {
+        logger.error('Failed to delete previous now playing message:', error);
+      }
+    }
+    this.nowPlayingMessage = message;
   }
 
 
@@ -173,6 +186,9 @@ export class GuildQueue {
    */
   private async handleTrackFinished() {
     if (!this.currentTrack) return;
+    
+    // Clear the now playing message
+    await this.setNowPlayingMessage(null);
 
     // Save to previous tracks
     this.previousTracks.push(this.currentTrack);

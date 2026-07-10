@@ -3,7 +3,10 @@ import {
   AutocompleteInteraction, 
   GuildMember, 
   SlashCommandBuilder, 
-  EmbedBuilder 
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle
 } from 'discord.js';
 import { joinVoiceChannel } from '@discordjs/voice';
 import play from 'play-dl';
@@ -132,51 +135,38 @@ export const playCommand = {
       // Add songs to queue
       queue.addTracks(tracks);
 
-      if (tracks.length > 1) {
-        // Playlist added embed
-        const firstTrackSource = tracks[0].source;
-        const color = firstTrackSource === 'spotify' ? '#1DB954' : (firstTrackSource === 'soundcloud' ? '#FF5500' : '#FF0000');
-        const embed = new EmbedBuilder()
-          .setColor(color)
-          .setAuthor({ name: '📚 Đã thêm Playlist vào hàng đợi' })
-          .setTitle(`Đã nạp thành công ${tracks.length} bài hát`)
-          .addFields(
-            { name: 'Kênh phát', value: `🔊 ${voiceChannel.name}`, inline: true },
-            { name: 'Yêu cầu bởi', value: `👤 ${interaction.user.username}`, inline: true },
-            { name: 'Nguồn', value: `🔌 ${firstTrackSource.toUpperCase()}`, inline: true }
-          )
-          .setFooter({ text: `Bot âm nhạc cao cấp • Hàng đợi hiện có: ${queue.tracks.length} bài` })
-          .setTimestamp();
+      const isNowPlaying = queue.currentTrack === tracks[0];
+      const track = tracks[0];
+      const color = track.source === 'spotify' ? 0x1DB954 : (track.source === 'soundcloud' ? 0xFF5500 : 0xFF0000);
 
-        if (tracks[0].thumbnail) {
-          embed.setThumbnail(tracks[0].thumbnail);
-        }
+      const embed = new EmbedBuilder()
+        .setColor(color)
+        .setAuthor({ name: tracks.length > 1 ? '📚 Đã thêm Playlist vào hàng đợi' : (isNowPlaying ? '🎶 Đang phát ngay bây giờ' : '📥 Đã thêm vào hàng chờ'), iconURL: requester.avatarUrl })
+        .setTitle(tracks.length > 1 ? `Đã nạp thành công ${tracks.length} bài hát` : track.title)
+        .setURL(tracks.length > 1 ? null : track.url)
+        .setDescription(tracks.length > 1 ? `Kênh: ${voiceChannel.name}` : `⏱️ \`${track.durationString}\``)
+        .addFields(
+          { name: 'Yêu cầu bởi', value: `👤 ${interaction.user.username}`, inline: true },
+          { name: 'Nguồn', value: `🔌 ${track.source.toUpperCase()}`, inline: true }
+        );
 
-        await interaction.editReply({ embeds: [embed] });
-      } else {
-        // Single track added embed
-        const track = tracks[0];
-        const isNowPlaying = queue.currentTrack === track;
-        const color = track.source === 'spotify' ? '#1DB954' : (track.source === 'soundcloud' ? '#FF5500' : '#FF0000');
-
-        const embed = new EmbedBuilder()
-          .setColor(color)
-          .setAuthor({ name: isNowPlaying ? '🎶 Đang phát ngay bây giờ' : '📥 Đã thêm vào hàng chờ', iconURL: requester.avatarUrl })
-          .setTitle(track.title)
-          .setURL(track.url)
-          .setDescription(`⏱️ \`${track.durationString}\``)
-          .addFields(
-            { name: 'Yêu cầu bởi', value: `👤 ${interaction.user.username}`, inline: true },
-            { name: 'Nguồn', value: `🔌 ${track.source.toUpperCase()}`, inline: true }
-          )
-          .setFooter({ text: `Vị trí trong hàng đợi: ${queue.tracks.length > 0 ? queue.tracks.length - 1 : 0}` });
-
-        if (track.thumbnail) {
-          embed.setThumbnail(track.thumbnail);
-        }
-
-        await interaction.editReply({ embeds: [embed] });
+      if (track.thumbnail) {
+        embed.setThumbnail(track.thumbnail);
       }
+
+      const row = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(
+          new ButtonBuilder().setCustomId('control_previous').setLabel('⏮️').setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId('control_pause_resume').setLabel('⏸️/▶️').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId('control_skip').setLabel('⏭️').setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId('control_loop').setLabel('🔁').setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId('control_volume_down').setLabel('🔉').setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId('control_volume_up').setLabel('🔊').setStyle(ButtonStyle.Secondary)
+        );
+
+      const message = await interaction.editReply({ embeds: [embed], components: [row] });
+      await queue.setNowPlayingMessage(message as any);
+
     } catch (err: any) {
       logger.error('Error in /play command execution:', err);
       await interaction.editReply(`❌ Gặp sự cố khi xử lý bài hát: **${err.message || err}**`);
