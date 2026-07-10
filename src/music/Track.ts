@@ -57,7 +57,7 @@ export class Track implements TrackData {
 
       // Stream the audio using yt-dlp (works for both YouTube, SoundCloud, etc.!)
       logger.info(`Creating audio stream via yt-dlp for: "${this.title}" (${finalUrl})`);
-      const stream = spawnYtDlpStream(finalUrl);
+      const stream = await spawnYtDlpStream(finalUrl);
 
       const resource = createAudioResource(stream, {
         inputType: StreamType.Arbitrary,

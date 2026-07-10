@@ -1,7 +1,7 @@
 import { config } from '../config/index.js';
 import fs from 'fs';
 import { logger } from './logger.js';
-import { execFile, spawn } from 'child_process';
+import { execFile, spawn, execSync } from 'child_process';
 import path from 'path';
 import { Readable } from 'stream';
 
@@ -17,17 +17,51 @@ export interface YouTubeSearchResult {
 const ROOT_DIR = process.cwd();
 const YTDLP_PATH = path.join(ROOT_DIR, 'bin', 'yt-dlp');
 
-// Proactively fix permissions for yt-dlp if needed (common issue on cloud hosts)
-if (fs.existsSync(YTDLP_PATH)) {
-  try {
+/**
+ * Đảm bảo yt-dlp tồn tại và có quyền thực thi.
+ * Nếu file bị lỗi (như lỗi SyntaxError PK trên Render), nó sẽ cố gắng tải lại bản chuẩn.
+ */
+async function ensureYtDlp(): Promise<string> {
+  const binDir = path.join(ROOT_DIR, 'bin');
+  if (!fs.existsSync(binDir)) {
+    fs.mkdirSync(binDir, { recursive: true });
+  }
+
+  // Kiểm tra xem file có chạy được không
+  let needsDownload = !fs.existsSync(YTDLP_PATH);
+  
+  if (!needsDownload) {
+    try {
+      // Thử chạy --version để kiểm tra tính toàn vẹn
+      execSync(`"${YTDLP_PATH}" --version`, { stdio: 'ignore' });
+    } catch (err) {
+      logger.warn('yt-dlp binary exists but is not working. Attempting to download a fresh copy...');
+      needsDownload = true;
+    }
+  }
+
+  if (needsDownload) {
+    logger.info('Downloading latest yt-dlp binary for Linux...');
+    const url = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
+    
+    try {
+      // Sử dụng curl hoặc wget (thường có sẵn trên Render/Linux)
+      execSync(`curl -L ${url} -o "${YTDLP_PATH}"`, { stdio: 'inherit' });
+      fs.chmodSync(YTDLP_PATH, 0o755);
+      logger.info('yt-dlp downloaded and permissions set.');
+    } catch (err) {
+      logger.error('Failed to download yt-dlp via curl:', err);
+      throw new Error('Could not prepare yt-dlp binary. Please ensure curl is installed.');
+    }
+  } else {
+    // Đảm bảo quyền thực thi kể cả khi file đã tồn tại
     const stats = fs.statSync(YTDLP_PATH);
     if ((stats.mode & fs.constants.S_IXUSR) === 0) {
-      logger.info('Fixing execution permissions for yt-dlp binary...');
       fs.chmodSync(YTDLP_PATH, 0o755);
     }
-  } catch (err) {
-    logger.warn('Failed to fix yt-dlp permissions proactively:', err);
   }
+
+  return YTDLP_PATH;
 }
 
 // Hardcoded PO Token & Visitor Data for fallback/default usage
@@ -54,10 +88,11 @@ function formatDuration(durationSec: number): string {
 /**
  * Runs the yt-dlp binary with specific arguments and returns stdout.
  */
-export function runYtDlp(args: string[]): Promise<string> {
+export async function runYtDlp(args: string[]): Promise<string> {
+  const binaryPath = await ensureYtDlp();
   return new Promise((resolve, reject) => {
-    logger.info(`Running yt-dlp command: "${YTDLP_PATH} ${args.map(a => a.includes(' ') ? `"${a}"` : a).join(' ')}"`);
-    execFile(YTDLP_PATH, args, { maxBuffer: 15 * 1024 * 1024 }, (error, stdout, stderr) => {
+    logger.info(`Running yt-dlp command: "${binaryPath} ${args.map(a => a.includes(' ') ? `"${a}"` : a).join(' ')}"`);
+    execFile(binaryPath, args, { maxBuffer: 15 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error) {
         logger.warn(`yt-dlp warning/error output: ${stderr || error.message}`);
         // Even if there's a minor error exit code, if we have valid stdout, use it
@@ -214,7 +249,8 @@ export async function ytDlpGetMetadata(url: string): Promise<YouTubeSearchResult
 /**
  * Spawns a yt-dlp audio stream process and returns its stdout.
  */
-export function spawnYtDlpStream(url: string): Readable {
+export async function spawnYtDlpStream(url: string): Promise<Readable> {
+  const binaryPath = await ensureYtDlp();
   const args = [
     '-f', 'bestaudio',
     '--no-playlist',
@@ -243,7 +279,7 @@ export function spawnYtDlpStream(url: string): Readable {
   }
 
   logger.info(`Spawning yt-dlp audio stream: "${url}"`);
-  const child = spawn(YTDLP_PATH, args, {
+  const child = spawn(binaryPath, args, {
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
