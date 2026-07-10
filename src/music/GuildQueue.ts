@@ -197,7 +197,10 @@ export class GuildQueue {
   }
 
   private async playTrack(track: Track): Promise<void> {
-    if (!this.currentTrack) return;
+    if (!this.currentTrack) {
+      this.isProcessing = false;
+      return;
+    }
     
     try {
       this.playbackDuration = 0;
@@ -215,6 +218,7 @@ export class GuildQueue {
       // Prevent sending double messages for the same track
       const now = Date.now();
       if (this.isMessaging || (this.lastMessageTrackUrl === this.currentTrack.url && (now - this.lastMessageTime < 5000))) {
+        logger.info(`Suppressed double message for track: ${this.currentTrack.title}`);
         return;
       }
       
@@ -273,13 +277,27 @@ export class GuildQueue {
       } catch (msgErr) {
         logger.error('Failed to send Now Playing embed to channel:', msgErr);
       } finally {
-        this.isMessaging = false;
+        // Delay resetting isMessaging to prevent rapid fire messages
+        setTimeout(() => { this.isMessaging = false; }, 3000);
       }
     } catch (err: any) {
       logger.error(`Error initiating playback in "${this.guildName}":`, err);
-      // If playing fails, shift and play next
+      this.isMessaging = false;
+      this.lastMessageTrackUrl = null;
+
+      // If playing fails, shift and try next track after a delay
       this.tracks.shift();
-      this.play();
+      setTimeout(() => {
+        if (this.tracks.length > 0) {
+          this.play();
+        } else if (this.is247) {
+          logger.info(`Queue empty after error but 24/7 is on, staying in channel.`);
+          this.currentTrack = null;
+          this.currentResource = null;
+        } else {
+          this.handleTrackFinished();
+        }
+      }, 3000);
     }
   }
 

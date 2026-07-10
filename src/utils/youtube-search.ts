@@ -62,6 +62,8 @@ function buildYtDlpArgs(baseArgs: string[]): string[] {
   args.push('--referer', 'https://www.youtube.com/');
   args.push('--no-cache-dir');
   args.push('--js-runtimes', `node:${process.execPath}`);
+  args.push('--add-header', 'Accept-Language: en-US,en;q=0.9');
+  args.push('--add-header', 'Sec-Fetch-Mode: navigate');
   
   let extractorArgsStr = 'youtube:player_client=ios,android,web';
 

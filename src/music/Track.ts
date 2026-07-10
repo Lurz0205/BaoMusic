@@ -110,12 +110,13 @@ export class Track implements TrackData {
     if (cleanInput.includes('spotify.com')) {
       try {
         try {
+          // Check if play-dl is initialized for Spotify
           if (play.is_expired()) {
             logger.info('Spotify token is expired or not loaded. Refreshing Spotify token...');
             await play.refreshToken();
           }
         } catch (err: any) {
-          logger.warn(`Failed to refresh Spotify token (non-fatal): ${err.message || err}`);
+          logger.warn(`Spotify token check failed (likely not configured): ${err.message || err}`);
         }
         const spotifyData = await play.spotify(cleanInput);
         if (spotifyData.type === 'playlist' || spotifyData.type === 'album') {
