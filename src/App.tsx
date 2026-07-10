@@ -36,9 +36,20 @@ export default function App() {
     cookiePath: string;
     tokenSet: boolean;
   } | null>(null);
-  const [guilds, setGuilds] = useState<Array<{id: string, name: string, channels: Array<{id: string, name: string}>}>>([]);
-  const [selectedGuild, setSelectedGuild] = useState<{id: string, name: string, channels: Array<{id: string, name: string}>} | null>(null);
+  const [guilds, setGuilds] = useState<Array<{
+    id: string, 
+    name: string, 
+    channels: Array<{id: string, name: string}>,
+    textChannels: Array<{id: string, name: string}>
+  }>>([]);
+  const [selectedGuild, setSelectedGuild] = useState<{
+    id: string, 
+    name: string, 
+    channels: Array<{id: string, name: string}>,
+    textChannels: Array<{id: string, name: string}>
+  } | null>(null);
   const [selectedChannelId, setSelectedChannelId] = useState('');
+  const [selectedTextChannelId, setSelectedTextChannelId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
   // UI states
@@ -58,7 +69,8 @@ export default function App() {
         body: JSON.stringify({ 
           guildId: selectedGuild.id, 
           query: searchQuery, 
-          voiceChannelId: selectedChannelId 
+          voiceChannelId: selectedChannelId,
+          textChannelId: selectedTextChannelId
         }),
       });
 
@@ -383,6 +395,7 @@ export default function App() {
                       const g = guilds.find(g => g.id === e.target.value);
                       setSelectedGuild(g || null);
                       setSelectedChannelId('');
+                      setSelectedTextChannelId('');
                     }}
                     className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200"
                   >
@@ -397,6 +410,14 @@ export default function App() {
                     <option value="">Chọn kênh thoại</option>
                     {selectedGuild?.channels.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
+                  <select 
+                    value={selectedTextChannelId}
+                    onChange={(e) => setSelectedTextChannelId(e.target.value)}
+                    className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200"
+                  >
+                    <option value="">Chọn kênh văn bản (Gửi tin nhắn)</option>
+                    {selectedGuild?.textChannels.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
                   <div className="flex gap-2 md:col-span-3">
                     <input 
                       type="text" 
@@ -407,7 +428,7 @@ export default function App() {
                     />
                     <button 
                       onClick={handlePlay}
-                      disabled={loading || !selectedGuild || !selectedChannelId || !searchQuery}
+                      disabled={loading || !selectedGuild || !selectedChannelId || !selectedTextChannelId || !searchQuery}
                       className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-4 py-2 rounded-lg text-sm"
                     >
                       Phát
@@ -571,19 +592,6 @@ export default function App() {
                                 <option value="queue">Queue (Hàng)</option>
                               </select>
                             </div>
-
-                            {/* Autoplay toggler */}
-                            <button
-                              onClick={() => handleQueueControl(room.guildId, 'autoplay', !room.autoplay)}
-                              className={`flex items-center px-3 py-1.5 rounded-xl text-xs font-bold border transition duration-150 cursor-pointer gap-1.5 shadow-sm ${
-                                room.autoplay 
-                                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
-                                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
-                              }`}
-                            >
-                              <span>Autoplay:</span>
-                              <span>{room.autoplay ? 'BẬT' : 'TẮT'}</span>
-                            </button>
 
                             {/* 24/7 toggler */}
                             <button

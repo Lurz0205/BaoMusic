@@ -25,7 +25,6 @@ export interface QueueState {
   isPaused: boolean;
   loopMode: 'off' | 'track' | 'queue';
   volume: number;
-  autoplay: boolean;
   is247: boolean;
   channelName: string | null;
   voiceChannelId: string | null;

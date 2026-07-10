@@ -37,7 +37,6 @@ export class GuildQueue {
   public loopMode: 'off' | 'track' | 'queue' = 'off';
   public volume = 100;
   public is247 = false;
-  public autoplay = false;
   public voiceChannelId: string;
   public channelName = '';
   public textChannelId?: string;
@@ -82,11 +81,8 @@ export class GuildQueue {
     // Start tracking duration
     this.playbackInterval = setInterval(() => {
       const state = this.player.state;
-      if (state.status === AudioPlayerStatus.Playing) {
-        const resource = (state as any).resource;
-        if (resource) {
-          this.playbackDuration = Math.floor(resource.playbackDuration / 1000);
-        }
+      if (state.status === AudioPlayerStatus.Playing && this.currentResource) {
+        this.playbackDuration = Math.floor(this.currentResource.playbackDuration / 1000);
       } else if (state.status === AudioPlayerStatus.Idle) {
         this.playbackDuration = 0;
       }
@@ -96,7 +92,8 @@ export class GuildQueue {
   public async setNowPlayingMessage(message: Message | null): Promise<void> {
     if (this.nowPlayingMessage) {
       try {
-        await this.nowPlayingMessage.delete();
+        // Use a safe wrapper for deletion
+        await this.nowPlayingMessage.delete().catch(() => null);
       } catch (error) {
         logger.error('Failed to delete previous now playing message:', error);
       }
@@ -330,9 +327,6 @@ export class GuildQueue {
       
       if (this.tracks.length > 0) {
         await this.play();
-      } else if (this.autoplay) {
-        // Queue ended, attempt autoplay fetch
-        await this.handleAutoplay();
       } else {
         // Queue truly ended
         this.currentTrack = null;
@@ -364,61 +358,6 @@ export class GuildQueue {
     if (this.idleTimer) {
       clearTimeout(this.idleTimer);
       this.idleTimer = undefined;
-    }
-  }
-
-  /**
-   * Search for related videos of the last played song and queue one
-   */
-  private async handleAutoplay(): Promise<void> {
-    const lastTrack = this.previousTracks[this.previousTracks.length - 1];
-    if (!lastTrack) return;
-
-    try {
-      logger.music(`Autoplay active: searching recommendations based on "${lastTrack.title}"...`, 'autoplay');
-      
-      // play-dl search for related content
-      let searchResult: any[] = [];
-      try {
-        const results = await searchYouTube(lastTrack.title, 5, 'youtube');
-        searchResult = results.map(v => ({
-          title: v.title,
-          url: v.url,
-          thumbnails: v.thumbnail ? [{ url: v.thumbnail }] : [],
-          durationInSec: v.duration,
-          durationRaw: v.durationString
-        }));
-      } catch (err) {
-        logger.warn(`searchYouTube failed in autoplay...`, err);
-      }
-      
-      const related = searchResult.filter(v => v.url !== lastTrack.url && (v.durationInSec || 0) > 30);
-      
-      if (related && related.length > 0) {
-        // Queue the first recommended video
-        const recommendedVideo = related[0];
-        const newTrack = new Track({
-          title: recommendedVideo.title || 'Recommended Track',
-          url: recommendedVideo.url,
-          thumbnail: recommendedVideo.thumbnails[0]?.url || '',
-          duration: recommendedVideo.durationInSec,
-          durationString: recommendedVideo.durationRaw || '0:00',
-          requestedBy: { username: 'Autoplay Recommendations' },
-          source: 'youtube',
-        });
-
-        this.tracks.push(newTrack);
-        logger.music(`Autoplay added: "${newTrack.title}"`, 'autoplay');
-        this.play();
-      } else {
-        logger.warn(`No autoplay recommendations found for "${lastTrack.title}".`);
-        this.currentTrack = null;
-        this.currentResource = null;
-      }
-    } catch (err: any) {
-      logger.error('Failed to resolve autoplay recommendations:', err);
-      this.currentTrack = null;
-      this.currentResource = null;
     }
   }
 
@@ -576,14 +515,6 @@ export class GuildQueue {
   }
 
   /**
-   * Set Autoplay mode
-   */
-  public setAutoplay(enable: boolean): void {
-    this.autoplay = enable;
-    logger.music(`Autoplay ${enable ? 'enabled' : 'disabled'} in "${this.guildName}"`, 'autoplay');
-  }
-
-  /**
    * Seek playback (if play-dl seek is possible by re-requesting stream)
    */
   public async seek(seconds: number): Promise<boolean> {
@@ -663,7 +594,6 @@ export class GuildQueue {
       isPaused: this.player.state.status === AudioPlayerStatus.Paused,
       loopMode: this.loopMode,
       volume: this.volume,
-      autoplay: this.autoplay,
       is247: this.is247,
       channelName: this.channelName,
       voiceChannelId: this.voiceChannelId,

@@ -127,6 +127,9 @@ PORT=${config.port}
       name: guild.name,
       channels: guild.channels.cache
         .filter(c => c.type === 2) // ChannelType.GuildVoice
+        .map(c => ({ id: c.id, name: c.name })),
+      textChannels: guild.channels.cache
+        .filter(c => c.type === 0) // ChannelType.GuildText
         .map(c => ({ id: c.id, name: c.name }))
     }));
     res.json(guilds);
@@ -178,10 +181,6 @@ PORT=${config.port}
         queue.loopMode = value as 'off' | 'track' | 'queue';
         return res.json({ success: true, message: `Đã đổi chế độ lặp thành ${value.toUpperCase()}` });
       }
-      if (action === 'autoplay') {
-        queue.setAutoplay(Boolean(value));
-        return res.json({ success: true, message: 'Đã cập nhật Autoplay' });
-      }
       if (action === '247') {
         queue.set247(Boolean(value));
         return res.json({ success: true, message: 'Đã cập nhật chế độ 24/7' });
@@ -194,7 +193,7 @@ PORT=${config.port}
 
   // Play/Join API
   app.post('/api/music/play', async (req, res) => {
-    const { guildId, query, voiceChannelId } = req.body;
+    const { guildId, query, voiceChannelId, textChannelId } = req.body;
     if (!guildId || !query) return res.status(400).json({ success: false, message: 'Thiếu thông tin!' });
     
     // Use playerManager to get/create queue
@@ -222,7 +221,9 @@ PORT=${config.port}
           adapterCreator: guild.voiceAdapterCreator,
         });
         
-        queue = playerManager.create(guild.id, guild.name, connection, channel.id, channel.name);
+        queue = playerManager.create(guild.id, guild.name, connection, channel.id, channel.name, textChannelId);
+      } else if (textChannelId) {
+        queue.textChannelId = textChannelId;
       }
       
       // Now play

@@ -43,7 +43,6 @@ export const queueCommand = {
       .setDescription(description)
       .addFields(
         { name: 'Lặp lại (Loop)', value: `🔄 ${queue.loopMode.toUpperCase()}`, inline: true },
-        { name: 'Autoplay', value: queue.autoplay ? '🟢 Bật' : '🔴 Tắt', inline: true },
         { name: 'Treo phòng 24/7', value: queue.is247 ? '🟢 Bật' : '🔴 Tắt', inline: true }
       )
       .setFooter({ text: `Tổng cộng: ${tracksList.length} bài hát | Âm lượng: ${queue.volume}%` })

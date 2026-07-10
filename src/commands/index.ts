@@ -15,7 +15,6 @@ import { clearCommand } from './clear.js';
 import { loopCommand } from './loop.js';
 import { volumeCommand } from './volume.js';
 import { voice247Command } from './247.js';
-import { autoplayCommand } from './autoplay.js';
 
 export const commands = [
   pingCommand,
@@ -34,8 +33,7 @@ export const commands = [
   clearCommand,
   loopCommand,
   volumeCommand,
-  voice247Command,
-  autoplayCommand
+  voice247Command
 ];
 
 export const commandsMap = new Map(
