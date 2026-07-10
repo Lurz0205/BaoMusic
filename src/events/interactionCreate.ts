@@ -63,31 +63,52 @@ export function registerInteractionCreateEvent(client: Client) {
 
       try {
         // Defer as quickly as possible to avoid 3s timeout
-        if (!interaction.deferred && !interaction.replied) {
-          try {
-            await interaction.deferReply({ ephemeral: false });
-          } catch (deferErr: any) {
-            // If defer fails, it's likely already handled or timed out
-            logger.warn(`Failed to defer interaction for /${interaction.commandName}: ${deferErr.message}`);
+        const safeDefer = async () => {
+          if (!interaction.deferred && !interaction.replied) {
+            try {
+              await interaction.deferReply({ ephemeral: false });
+            } catch (deferErr: any) {
+              logger.warn(`Failed to defer interaction for /${interaction.commandName}: ${deferErr.message}`);
+            }
           }
-        }
+        };
+
+        await safeDefer();
 
         logger.info(`Executing command: /${interaction.commandName} by ${interaction.user.tag} in "${interaction.guild?.name || 'DM'}"`);
 
-        // Monkey-patch reply to automatically use editReply if deferred
+        // Monkey-patch response methods to be state-aware
         const originalReply = interaction.reply.bind(interaction);
+        const originalEditReply = interaction.editReply.bind(interaction);
+
         const wrappedInteraction = interaction as any;
+
         wrappedInteraction.reply = async (options: any) => {
-          if (interaction.deferred || interaction.replied) {
-            try {
-              return await interaction.editReply(options);
-            } catch (err) {
-              // If editReply fails, fallback to original reply if possible
-              if (!interaction.replied) return await originalReply(options);
-              throw err;
+          try {
+            if (interaction.replied || interaction.deferred) {
+              return await originalEditReply(options);
             }
+            return await originalReply(options);
+          } catch (err: any) {
+            if (err.code === 10062 || err.code === 40060) return;
+            throw err;
           }
-          return await originalReply(options);
+        };
+
+        wrappedInteraction.editReply = async (options: any) => {
+          try {
+            if (!interaction.replied && !interaction.deferred) {
+              return await originalReply(options);
+            }
+            return await originalEditReply(options);
+          } catch (err: any) {
+            if (err.code === 10062) return;
+            // Handle InteractionNotReplied specifically
+            if (err.code === 'InteractionNotReplied' || (err.message && err.message.includes('not been sent or deferred'))) {
+              try { return await originalReply(options); } catch { return; }
+            }
+            throw err;
+          }
         };
 
         await command.execute(wrappedInteraction);

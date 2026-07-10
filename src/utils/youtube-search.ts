@@ -336,9 +336,10 @@ export async function spawnYtDlpStream(url: string): Promise<Readable> {
 }
 
 export async function spawnStream(url: string): Promise<Readable> {
-  if (url.includes('soundcloud.com') || url.includes('spotify.com')) {
+  // Always try play-dl first for YouTube/SoundCloud/Spotify as it's generally more stable and handles bot detection better
+  if (url.includes('youtube.com') || url.includes('youtu.be') || url.includes('soundcloud.com') || url.includes('spotify.com')) {
     try {
-      logger.info(`Attempting play-dl stream for non-YouTube URL: ${url}`);
+      logger.info(`Attempting play-dl stream for: ${url}`);
       const stream = await play.stream(url, { discordPlayerCompatibility: true });
       return stream.stream;
     } catch (err: any) {
