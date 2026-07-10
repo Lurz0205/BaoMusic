@@ -13,24 +13,24 @@ export function registerInteractionCreateEvent(client: Client) {
       switch (interaction.customId) {
         case 'control_skip':
           queue.skip();
-          await interaction.deferUpdate();
+          try { await interaction.deferUpdate(); } catch {}
           break;
         case 'control_pause_resume':
           if (queue.player.state.status === 'playing') queue.pause();
           else queue.resume();
-          await interaction.deferUpdate();
+          try { await interaction.deferUpdate(); } catch {}
           break;
         case 'control_previous':
           queue.previous();
-          await interaction.deferUpdate();
+          try { await interaction.deferUpdate(); } catch {}
           break;
         case 'control_volume_up':
           queue.setVolume(Math.min(queue.volume + 10, 100));
-          await interaction.deferUpdate();
+          try { await interaction.deferUpdate(); } catch {}
           break;
         case 'control_volume_down':
           queue.setVolume(Math.max(queue.volume - 10, 0));
-          await interaction.deferUpdate();
+          try { await interaction.deferUpdate(); } catch {}
           break;
         case 'control_loop': {
           const modes: ('off' | 'track' | 'queue')[] = ['off', 'track', 'queue'];
@@ -92,7 +92,8 @@ export function registerInteractionCreateEvent(client: Client) {
               return await originalEditReply(options);
             } catch (err: any) {
               if (err.code === 10062 || err.code === 40060) return;
-              throw err;
+              // Fallback to original reply if possible
+              try { return await originalReply(options); } catch { return; }
             }
           }
           try {
@@ -134,7 +135,10 @@ export function registerInteractionCreateEvent(client: Client) {
                 const res = await originalReply(options); 
                 hasResponded = true;
                 return res;
-              } catch { return; }
+              } catch { 
+                // Last ditch effort
+                try { return await originalEditReply(options); } catch { return; }
+              }
             }
             throw err;
           }

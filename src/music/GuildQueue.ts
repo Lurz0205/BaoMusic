@@ -47,6 +47,7 @@ export class GuildQueue {
 
   private nowPlayingMessage: Message | null = null;
   public playbackDuration = 0;
+  private isProcessing = false;
   private playbackInterval: NodeJS.Timeout | null = null;
   
   private isTransitioningPrevious = false;
@@ -164,6 +165,8 @@ export class GuildQueue {
    * Play the current track at the top of the queue or continue playing
    */
   public async play(): Promise<void> {
+    if (this.isProcessing) return;
+    
     try {
       if (this.player.state.status === AudioPlayerStatus.Paused) {
         this.player.unpause();
@@ -173,10 +176,26 @@ export class GuildQueue {
 
       if (this.tracks.length === 0) {
         logger.music(`Queue is empty for "${this.guildName}". Play skipped.`, 'info');
+        this.startIdleLeaveTimer();
         return;
       }
 
+      this.isProcessing = true;
       this.currentTrack = this.tracks[0];
+      await this.playTrack(this.currentTrack);
+    } catch (err) {
+      logger.error('Error in play():', err);
+      this.isProcessing = false;
+      this.handleTrackFinished(); // Try next
+    } finally {
+      this.isProcessing = false;
+    }
+  }
+
+  private async playTrack(track: Track): Promise<void> {
+    if (!this.currentTrack) return;
+    
+    try {
       this.playbackDuration = 0;
       logger.music(`Generating stream for: "${this.currentTrack.title}"`, 'play');
       
@@ -383,12 +402,12 @@ export class GuildQueue {
   /**
    * Add a list of tracks to the queue. Automatically plays if nothing is playing.
    */
-  public addTracks(newTracks: Track[]): void {
+  public async addTracks(newTracks: Track[]): Promise<void> {
     this.clearIdleLeaveTimer();
     this.tracks.push(...newTracks);
     
-    if (!this.currentTrack) {
-      this.play();
+    if (this.player.state.status === AudioPlayerStatus.Idle && !this.isProcessing) {
+      await this.play();
     }
   }
 

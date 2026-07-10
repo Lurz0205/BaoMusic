@@ -63,7 +63,7 @@ function buildYtDlpArgs(baseArgs: string[]): string[] {
   args.push('--no-cache-dir');
   args.push('--js-runtimes', `node:${process.execPath}`);
   
-  let extractorArgsStr = 'youtube:player_client=ios';
+  let extractorArgsStr = 'youtube:player_client=ios,android,web';
 
   const poToken = process.env.YT_PO_TOKEN;
   if (poToken) {

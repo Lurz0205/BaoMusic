@@ -143,25 +143,25 @@ export const playCommand = {
       // Add songs to queue
       queue.addTracks(tracks);
 
-      const track = tracks[0];
-      const color = track.source === 'spotify' ? 0x1DB954 : (track.source === 'soundcloud' ? 0xFF5500 : 0xFF0000);
+      if (tracks.length === 1) {
+        const track = tracks[0];
+        await interaction.editReply({ 
+          content: `✅ Đã thêm **${track.title}** vào hàng chờ!`,
+          embeds: [] 
+        });
+      } else {
+        const color = tracks[0].source === 'spotify' ? 0x1DB954 : (tracks[0].source === 'soundcloud' ? 0xFF5500 : 0xFF0000);
+        const embed = new EmbedBuilder()
+          .setColor(color)
+          .setAuthor({ 
+            name: '📚 Đã nạp thành công Playlist', 
+            iconURL: requester.avatarUrl 
+          })
+          .setTitle(`Đã nạp thành công ${tracks.length} bài hát`)
+          .setDescription(`Kênh: ${voiceChannel.name}`);
 
-      const embed = new EmbedBuilder()
-        .setColor(color)
-        .setAuthor({ 
-          name: tracks.length > 1 ? '📚 Đã nạp thành công Playlist' : '📥 Đã thêm vào hàng chờ', 
-          iconURL: requester.avatarUrl 
-        })
-        .setTitle(tracks.length > 1 ? `Đã nạp thành công ${tracks.length} bài hát` : track.title)
-        .setURL(tracks.length > 1 ? null : track.url)
-        .setDescription(tracks.length > 1 ? `Kênh: ${voiceChannel.name}` : `⏱️ \`${track.durationString}\``);
-
-      if (tracks.length === 1 && track.thumbnail) {
-        embed.setThumbnail(track.thumbnail);
+        await interaction.editReply({ embeds: [embed] });
       }
-
-      await interaction.editReply({ embeds: [embed] });
-
     } catch (err: any) {
       logger.error('Error in /play command execution:', err);
       await interaction.editReply(`❌ Gặp sự cố khi xử lý bài hát: **${err.message || err}**`);
