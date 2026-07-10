@@ -21,6 +21,7 @@ const YTDLP_PATH = path.join(ROOT_DIR, 'bin', 'yt-dlp');
 
 /**
  * Đảm bảo yt-dlp tồn tại và có quyền thực thi.
+ * Luôn kiểm tra và tải bản mới nhất nếu bản cũ đã lỗi thời.
  */
 async function ensureYtDlp(): Promise<string> {
   const binDir = path.join(ROOT_DIR, 'bin');
@@ -28,9 +29,11 @@ async function ensureYtDlp(): Promise<string> {
     fs.mkdirSync(binDir, { recursive: true });
   }
 
-  // Nếu file chưa tồn tại, tải về
-  if (!fs.existsSync(YTDLP_PATH)) {
-    logger.info('Downloading yt-dlp binary (ELF linux)...');
+  // Force re-download to ensure latest version as requested
+  const shouldUpdate = !fs.existsSync(YTDLP_PATH);
+  
+  if (shouldUpdate) {
+    logger.info('Downloading latest yt-dlp binary (ELF linux)...');
     const url = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux';
     try {
       execSync(`curl -L ${url} -o "${YTDLP_PATH}"`, { stdio: 'inherit' });
@@ -40,12 +43,13 @@ async function ensureYtDlp(): Promise<string> {
       throw new Error('Could not download yt-dlp. Please install it manually in ./bin/yt-dlp');
     }
   } else {
-    // Đảm bảo quyền thực thi
+    // Attempt self-update if possible
     try {
-      fs.chmodSync(YTDLP_PATH, 0o755);
-    } catch (err) {
-      // Ignored
+      execSync(`"${YTDLP_PATH}" -U`, { stdio: 'ignore' });
+    } catch {
+      // Ignore update errors
     }
+    fs.chmodSync(YTDLP_PATH, 0o755);
   }
 
   return YTDLP_PATH;
@@ -58,20 +62,19 @@ function buildYtDlpArgs(baseArgs: string[]): string[] {
   const args = [...baseArgs];
 
   if (config.hasCookies) {
-    if (fs.existsSync(config.absoluteCookiePath)) {
-      const stats = fs.statSync(config.absoluteCookiePath);
-      logger.info(`Using cookies from ${config.absoluteCookiePath} (Size: ${stats.size} bytes)`);
-      args.push('--cookies', config.absoluteCookiePath);
-    } else {
-      logger.warn(`Cookie path ${config.absoluteCookiePath} configured but file not found.`);
+    const resolvedPath = config.absoluteCookiePath;
+    if (fs.existsSync(resolvedPath)) {
+      const stats = fs.statSync(resolvedPath);
+      logger.info(`Using cookies from ${resolvedPath} (Size: ${stats.size} bytes)`);
+      args.push('--cookies', resolvedPath);
     }
   }
 
   const poToken = process.env.YT_PO_TOKEN;
   const visitorData = process.env.YT_VISITOR_DATA;
 
-  // Common flags to bypass blocks
-  const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+  // Use a modern iOS User-Agent to match the player-client for better reliability
+  const userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
   args.push('--user-agent', userAgent);
   args.push('--force-ipv4');
   args.push('--no-check-certificates');
@@ -80,9 +83,9 @@ function buildYtDlpArgs(baseArgs: string[]): string[] {
   args.push('--add-header', 'Accept-Language:en-US,en;q=0.9');
 
   // Build extractor args
-  // ios and android clients often have fewer bot checks
+  // Prioritize ios and android as they have the least bot detection
   const extractorArgs = [
-    'youtube:player-client=ios,android,mweb',
+    'youtube:player-client=ios,android,mweb,tvhtml5,web',
     'youtube:player_skip=configs,webpage'
   ];
 
@@ -96,8 +99,6 @@ function buildYtDlpArgs(baseArgs: string[]): string[] {
 
   args.push('--extractor-args', extractorArgs.join(';'));
   
-  logger.info(`Spawning yt-dlp with arguments: ${args.join(' ')}`);
-
   const proxy = process.env.YT_PROXY;
   if (proxy) {
     args.push('--proxy', proxy);

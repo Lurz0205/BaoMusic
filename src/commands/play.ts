@@ -7,6 +7,7 @@ import {
 } from 'discord.js';
 import { joinVoiceChannel } from '@discordjs/voice';
 import play from 'play-dl';
+import { YouTube } from 'youtube-sr';
 import { playerManager } from '../music/PlayerManager.js';
 import { Track } from '../music/Track.js';
 import { logger } from '../utils/logger.js';
@@ -35,22 +36,22 @@ export const playCommand = {
     }
 
     try {
-      // Use play-dl for autocomplete suggestions as it's more reliable than youtube-sr right now
-      // Discord requires response within 3 seconds.
-      const searchResults = await play.search(focusedValue, { limit: 10, source: { youtube: 'video' } });
+      // Use youtube-sr suggestions for autocomplete as it is extremely robust and fast
+      // Suggestions are usually just strings, which is exactly what we want for autocomplete
+      const suggestions = await YouTube.getSuggestions(focusedValue);
       
-      const choices = searchResults.slice(0, 25).map((video) => {
-        const title = video.title || 'Unknown Title';
+      const choices = suggestions.slice(0, 25).map((query) => {
+        const title = typeof query === 'string' ? query : (query.title || 'Unknown');
         const formattedTitle = title.length > 95 ? title.slice(0, 92) + '...' : title;
         return {
-          name: `${formattedTitle} (${video.durationRaw || 'Live'})`,
-          value: video.url,
+          name: formattedTitle,
+          value: title, // Value will be the query string, which /play handles fine
         };
       });
       
       await interaction.respond(choices);
     } catch (err: any) {
-      logger.warn('Autocomplete via play-dl failed:', err.message || err);
+      logger.warn('Autocomplete via youtube-sr suggestions failed:', err.message || err);
       // Fail silently for interaction
       try {
         await interaction.respond([]);
