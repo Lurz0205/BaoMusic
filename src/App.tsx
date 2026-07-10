@@ -53,7 +53,52 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
 
   // UI states
-  const [activeTab, setActiveTab] = useState<'status' | 'guide'>('status');
+  const [activeTab, setActiveTab] = useState<'status' | 'guide' | 'settings'>('status');
+  const [cookieInfo, setCookieInfo] = useState<{ exists: boolean, lastUpdated: string | null } | null>(null);
+  const [uploadingCookie, setUploadingCookie] = useState(false);
+
+  // Fetch cookie info
+  const fetchCookieInfo = async () => {
+    try {
+      const res = await fetch('/api/settings/cookies');
+      const data = await res.json();
+      setCookieInfo(data);
+    } catch (err) {
+      console.error('Failed to fetch cookie info:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchCookieInfo();
+  }, []);
+
+  const handleCookieUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingCookie(true);
+    const formData = new FormData();
+    formData.append('cookieFile', file);
+
+    try {
+      const res = await fetch('/api/settings/cookies', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success) {
+        triggerAlert('success', data.message);
+        fetchCookieInfo();
+      } else {
+        triggerAlert('error', 'Lỗi: ' + data.message);
+      }
+    } catch (err) {
+      triggerAlert('error', 'Lỗi khi tải file lên.');
+    } finally {
+      setUploadingCookie(false);
+      e.target.value = ''; // Reset input
+    }
+  };
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [copiedText, setCopiedText] = useState<string | null>(null);
@@ -230,6 +275,16 @@ export default function App() {
               }`}
             >
               Hướng dẫn Deploy
+            </button>
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
+                activeTab === 'settings' 
+                  ? 'bg-indigo-600 text-white shadow-[0_0_20px_rgba(79,70,229,0.3)] border border-indigo-500' 
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+              }`}
+            >
+              Cấu hình (Cookies)
             </button>
           </div>
         </div>
@@ -790,6 +845,103 @@ export default function App() {
                   </li>
                   <li>Click <strong className="text-slate-300">Create Monitor</strong> để hoàn tất. UptimeRobot sẽ gửi request ping định kỳ để giữ cho máy chủ không bị ngủ đông!</li>
                 </ol>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab Cấu hình (Settings) - Cookies and others */}
+        {activeTab === 'settings' && (
+          <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-xl">
+              <div className="flex items-center space-x-4 mb-8">
+                <div className="p-3 bg-amber-500/10 text-amber-500 rounded-2xl border border-amber-500/20">
+                  <Disc className="w-8 h-8" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-white tracking-tight">Quản lý Cookies YouTube</h2>
+                  <p className="text-sm text-slate-400">Tải lên file cookies.txt để bỏ qua xác thực bot của YouTube.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div className="bg-slate-950/50 p-6 rounded-2xl border border-slate-800">
+                  <h3 className="text-sm font-bold text-slate-300 mb-3 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-indigo-400" />
+                    Trạng thái hiện tại
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-500">File tồn tại:</span>
+                      {cookieInfo?.exists ? (
+                        <span className="text-emerald-400 font-bold flex items-center gap-1">
+                          <CheckCircle2 className="w-4 h-4" /> Có
+                        </span>
+                      ) : (
+                        <span className="text-rose-400 font-bold flex items-center gap-1">
+                          <XCircle className="w-4 h-4" /> Không
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-500">Cập nhật lúc:</span>
+                      <span className="text-slate-300 font-medium">
+                        {cookieInfo?.lastUpdated ? new Date(cookieInfo.lastUpdated).toLocaleString('vi-VN') : 'Chưa có'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-indigo-500/5 p-6 rounded-2xl border border-indigo-500/10 flex flex-col justify-center items-center text-center">
+                  <Upload className="w-8 h-8 text-indigo-400 mb-3" />
+                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+                    Sử dụng các tiện ích mở rộng như "Get cookies.txt" trên Chrome/Edge để xuất file cookies từ YouTube.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <label className="block">
+                  <span className="sr-only">Chọn file cookies.txt</span>
+                  <div className="relative group cursor-pointer">
+                    <input 
+                      type="file" 
+                      accept=".txt"
+                      onChange={handleCookieUpload}
+                      disabled={uploadingCookie}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+                    />
+                    <div className={`w-full py-12 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all duration-200 ${
+                      uploadingCookie 
+                        ? 'bg-slate-800/50 border-slate-700 opacity-50' 
+                        : 'bg-slate-950/30 border-slate-800 group-hover:border-indigo-500/50 group-hover:bg-indigo-500/5'
+                    }`}>
+                      {uploadingCookie ? (
+                        <>
+                          <RefreshCw className="w-8 h-8 text-indigo-400 animate-spin mb-3" />
+                          <p className="text-sm font-bold text-slate-300">Đang tải lên...</p>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-8 h-8 text-slate-500 group-hover:text-indigo-400 mb-3 transition-colors" />
+                          <p className="text-sm font-bold text-slate-300 group-hover:text-white transition-colors">
+                            Nhấp để chọn hoặc kéo thả file <code className="bg-slate-800 px-1.5 py-0.5 rounded text-indigo-400">cookies.txt</code>
+                          </p>
+                          <p className="text-xs text-slate-500 mt-2">Chỉ chấp nhận định dạng .txt</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              <div className="mt-8 p-4 bg-slate-950 rounded-xl border border-slate-800">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Lưu ý quan trọng:</h4>
+                <ul className="text-xs text-slate-500 space-y-1.5 list-disc list-inside">
+                  <li>Không chia sẻ file cookies của bạn cho bất kỳ ai.</li>
+                  <li>Nếu bot vẫn gặp lỗi "Sign in to confirm you're not a bot", hãy làm mới file cookies từ trình duyệt của bạn.</li>
+                  <li>Play-DL và YT-DLP sẽ tự động sử dụng file này sau khi tải lên thành công.</li>
+                </ul>
               </div>
             </div>
           </div>

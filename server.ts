@@ -10,8 +10,13 @@ import { logger } from './src/utils/logger.js';
 import { initPlayDL } from './src/utils/playdl-init.js';
 import { ensureYtDlp } from './src/utils/youtube-search.js';
 
+import multer from 'multer';
+
 // Load environment files
 dotenv.config();
+
+// Set up multer for cookie file uploads
+const upload = multer({ dest: 'uploads/' });
 
 async function bootstrap() {
   const app = express();
@@ -74,7 +79,48 @@ PORT=${config.port}
     }
   });
 
-  // Upload/save youtube cookies.txt contents
+  // Cookie management endpoints
+  app.get('/api/settings/cookies', (req, res) => {
+    const cookiePath = config.absoluteCookiePath;
+    const exists = fs.existsSync(cookiePath);
+    let lastUpdated = null;
+    
+    if (exists) {
+      const stats = fs.statSync(cookiePath);
+      lastUpdated = stats.mtime;
+    }
+    
+    res.json({
+      exists,
+      lastUpdated,
+      path: config.cookiePath
+    });
+  });
+
+  app.post('/api/settings/cookies', upload.single('cookieFile'), async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Không có file nào được tải lên!' });
+    }
+
+    try {
+      const cookieDir = path.dirname(config.absoluteCookiePath);
+      if (!fs.existsSync(cookieDir)) {
+        fs.mkdirSync(cookieDir, { recursive: true });
+      }
+
+      fs.renameSync(req.file.path, config.absoluteCookiePath);
+      
+      // Re-initialize play-dl with newly supplied cookie credentials
+      await initPlayDL();
+      
+      res.json({ success: true, message: 'Đã cập nhật file cookies.txt thành công! Play-DL đã tải cookie mới.' });
+    } catch (err: any) {
+      logger.error('Failed to save cookie file:', err);
+      res.status(500).json({ success: false, message: `Lỗi khi lưu file cookie: ${err.message}` });
+    }
+  });
+
+  // Upload/save youtube cookies.txt contents (Legacy Text version)
   app.post('/api/cookie', async (req, res) => {
     const { cookieText } = req.body;
     

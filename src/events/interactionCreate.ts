@@ -1,4 +1,4 @@
-import { Client, Interaction } from 'discord.js';
+import { Client, Interaction, MessageFlags } from 'discord.js';
 import { commandsMap } from '../commands/index.js';
 import { logger } from '../utils/logger.js';
 import { playerManager } from '../music/PlayerManager.js';
@@ -45,7 +45,7 @@ export function registerInteractionCreateEvent(client: Client) {
           try {
             await interaction.followUp({
               content: `🔄 Đã chuyển chế độ lặp sang: **${modeViet}**!`,
-              ephemeral: true
+              flags: [MessageFlags.Ephemeral]
             });
           } catch {}
           break;

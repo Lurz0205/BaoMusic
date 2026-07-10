@@ -43,10 +43,18 @@ export class Track implements TrackData {
           logger.info(`Searching YouTube equivalent for Spotify track: "${this.title}"...`);
           let youtubeUrl: string | null = null;
           try {
+            // First try yt-dlp search
             const searchResults = await searchYouTube(this.title, 1, 'youtube');
             if (searchResults && searchResults.length > 0) {
               youtubeUrl = searchResults[0].url;
-              logger.info(`Found YouTube equivalent for Spotify: "${searchResults[0].title}" (${youtubeUrl})`);
+              logger.info(`Found YouTube equivalent for Spotify (yt-dlp): "${searchResults[0].title}"`);
+            } else {
+              // Fallback to play.search
+              const playResults = await play.search(this.title, { limit: 1, source: { youtube: 'video' } });
+              if (playResults && playResults.length > 0) {
+                youtubeUrl = playResults[0].url;
+                logger.info(`Found YouTube equivalent for Spotify (play-dl): "${playResults[0].title}"`);
+              }
             }
           } catch (err: any) {
             logger.error(`YouTube search failed for Spotify conversion:`, err.message || err);
@@ -225,11 +233,31 @@ export class Track implements TrackData {
           duration: v.duration,
           durationString: v.durationString,
           requestedBy,
-          source: platform as any
+          source: platform === 'unknown' ? 'youtube' : platform as any
         })];
       }
     } catch (err: any) {
       logger.error(`yt-dlp search failed for query "${cleanInput}":`, err.message || err);
+    }
+
+    // Try play-dl search as second fallback if yt-dlp search failed
+    try {
+      logger.info(`Trying play-dl search fallback for query: "${cleanInput}"`);
+      const playResults = await play.search(cleanInput, { limit: 1, source: { youtube: 'video' } });
+      if (playResults && playResults.length > 0) {
+        const v = playResults[0];
+        return [new Track({
+          title: v.title || 'Unknown',
+          url: v.url,
+          thumbnail: (v as any).thumbnails?.[0]?.url || '',
+          duration: (v as any).durationInSec || 0,
+          durationString: (v as any).durationRaw || '0:00',
+          requestedBy,
+          source: 'youtube'
+        })];
+      }
+    } catch (playErr: any) {
+      logger.error(`play-dl search fallback also failed:`, playErr.message || playErr);
     }
 
     throw new Error('Không tìm thấy kết quả hoặc bài hát nào cho yêu cầu này.');

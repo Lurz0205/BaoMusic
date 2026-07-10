@@ -78,15 +78,16 @@ export class GuildQueue {
     this.setupPlayerListeners();
     this.setupConnectionListeners();
     
-    // Start tracking duration
+    // Start tracking duration every 500ms for smoother updates
     this.playbackInterval = setInterval(() => {
       const state = this.player.state;
       if (state.status === AudioPlayerStatus.Playing && this.currentResource) {
+        // resource.playbackDuration is in ms
         this.playbackDuration = Math.floor(this.currentResource.playbackDuration / 1000);
       } else if (state.status === AudioPlayerStatus.Idle) {
         this.playbackDuration = 0;
       }
-    }, 1000);
+    }, 500);
   }
 
   public async setNowPlayingMessage(message: Message | null): Promise<void> {
@@ -217,7 +218,7 @@ export class GuildQueue {
 
       // Prevent sending double messages for the same track
       const now = Date.now();
-      if (this.isMessaging || (this.lastMessageTrackUrl === this.currentTrack.url && (now - this.lastMessageTime < 5000))) {
+      if (this.isMessaging || (this.lastMessageTrackUrl === this.currentTrack.url && (now - this.lastMessageTime < 8000))) {
         logger.info(`Suppressed double message for track: ${this.currentTrack.title}`);
         return;
       }
@@ -278,7 +279,7 @@ export class GuildQueue {
         logger.error('Failed to send Now Playing embed to channel:', msgErr);
       } finally {
         // Delay resetting isMessaging to prevent rapid fire messages
-        setTimeout(() => { this.isMessaging = false; }, 3000);
+        setTimeout(() => { this.isMessaging = false; }, 5000);
       }
     } catch (err: any) {
       logger.error(`Error initiating playback in "${this.guildName}":`, err);
@@ -294,6 +295,7 @@ export class GuildQueue {
           logger.info(`Queue empty after error but 24/7 is on, staying in channel.`);
           this.currentTrack = null;
           this.currentResource = null;
+          this.isProcessing = false;
         } else {
           this.handleTrackFinished();
         }
