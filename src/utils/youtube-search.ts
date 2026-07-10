@@ -80,9 +80,10 @@ function buildYtDlpArgs(baseArgs: string[]): string[] {
   args.push('--add-header', 'Accept-Language:en-US,en;q=0.9');
 
   // Build extractor args
-  // Use android and ios as primary clients as they are often more permissive for bot checks
+  // ios and android clients often have fewer bot checks
   const extractorArgs = [
-    'youtube:player-client=android,ios,mweb,web',
+    'youtube:player-client=ios,android,mweb',
+    'youtube:player_skip=configs,webpage'
   ];
 
   if (poToken) {
@@ -94,6 +95,8 @@ function buildYtDlpArgs(baseArgs: string[]): string[] {
   }
 
   args.push('--extractor-args', extractorArgs.join(';'));
+  
+  logger.info(`Spawning yt-dlp with arguments: ${args.join(' ')}`);
 
   const proxy = process.env.YT_PROXY;
   if (proxy) {
