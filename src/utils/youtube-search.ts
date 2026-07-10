@@ -29,18 +29,22 @@ async function ensureYtDlp(): Promise<string> {
     fs.mkdirSync(binDir, { recursive: true });
   }
 
-  // Force re-download to ensure latest version as requested
-  const shouldUpdate = !fs.existsSync(YTDLP_PATH);
+  // Force re-download to ensure latest version periodically or if missing
+  const stats = fs.existsSync(YTDLP_PATH) ? fs.statSync(YTDLP_PATH) : null;
+  // If older than 12 hours or missing, re-download
+  const shouldDownload = !stats || (Date.now() - stats.mtimeMs > 12 * 60 * 60 * 1000);
   
-  if (shouldUpdate) {
-    logger.info('Downloading latest yt-dlp binary (ELF linux)...');
+  if (shouldDownload) {
+    logger.info('Downloading/Updating latest yt-dlp binary (ELF linux)...');
     const url = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux';
     try {
       execSync(`curl -L ${url} -o "${YTDLP_PATH}"`, { stdio: 'inherit' });
       fs.chmodSync(YTDLP_PATH, 0o755);
     } catch (err) {
       logger.error('Failed to download yt-dlp:', err);
-      throw new Error('Could not download yt-dlp. Please install it manually in ./bin/yt-dlp');
+      if (!fs.existsSync(YTDLP_PATH)) {
+        throw new Error('Could not download yt-dlp. Please install it manually in ./bin/yt-dlp');
+      }
     }
   } else {
     // Attempt self-update if possible
@@ -83,9 +87,10 @@ function buildYtDlpArgs(baseArgs: string[]): string[] {
   args.push('--add-header', 'Accept-Language:en-US,en;q=0.9');
 
   // Build extractor args
-  // Prioritize ios and android as they have the least bot detection
+  // Use a mix of clients that are less likely to be blocked
+  // tv_downgraded and web_creator often work when ios/android fail for some videos
   const extractorArgs = [
-    'youtube:player-client=ios,android,mweb,tvhtml5,web',
+    'youtube:player-client=ios,android,mweb,tv_downgraded,web',
     'youtube:player_skip=configs,webpage'
   ];
 
@@ -150,7 +155,52 @@ export async function runYtDlp(args: string[]): Promise<string> {
  * Uses play-dl primarily for speed, falls back to yt-dlp if needed.
  */
 export async function searchYouTube(query: string, limit: number = 5): Promise<YouTubeSearchResult[]> {
-  // Try play-dl first (much more reliable for full search)
+  // 1. Try yt-dlp first (most reliable for search results when cookies are involved)
+  try {
+    const baseArgs = [
+      `ytsearch${limit}:${query}`,
+      '--flat-playlist',
+      '--dump-json',
+      '--js-runtimes', 'node'
+    ];
+
+    const args = buildYtDlpArgs(baseArgs);
+    const output = await runYtDlp(args);
+    
+    if (output) {
+      const lines = output.trim().split('\n');
+      const results: YouTubeSearchResult[] = [];
+      
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const item = JSON.parse(line);
+          // Skip channel entries
+          if (item._type === 'playlist' || item._type === 'url') {
+            if (item.url && (item.url.includes('channel/') || item.url.includes('@'))) continue;
+          }
+          
+          const id = item.id || '';
+          results.push({
+            id,
+            title: item.title || 'Unknown Title',
+            url: item.url || `https://www.youtube.com/watch?v=${id}`,
+            thumbnail: item.thumbnails?.[0]?.url || item.thumbnail || '',
+            duration: item.duration || 0,
+            durationString: item.duration_string || formatDuration(item.duration || 0)
+          });
+        } catch {
+          // Skip invalid JSON
+        }
+      }
+      
+      if (results.length > 0) return results;
+    }
+  } catch (err: any) {
+    logger.warn(`searchYouTube via yt-dlp failed for query "${query}":`, err.message || err);
+  }
+
+  // 2. Try play-dl as fallback
   try {
     const playResults = await play.search(query, { limit, source: { youtube: 'video' } });
     if (playResults && playResults.length > 0) {
@@ -167,7 +217,7 @@ export async function searchYouTube(query: string, limit: number = 5): Promise<Y
     logger.warn(`play-dl search failed, trying youtube-sr fallback: ${err.message || err}`);
   }
 
-  // Fallback to youtube-sr
+  // 3. Fallback to youtube-sr
   try {
     const srResults = await YouTube.search(query, { limit, type: 'video' });
     if (srResults && srResults.length > 0) {
@@ -184,55 +234,7 @@ export async function searchYouTube(query: string, limit: number = 5): Promise<Y
     logger.warn(`youtube-sr search failed: ${err.message || err}`);
   }
 
-  // Fallback to yt-dlp search if others fail
-  try {
-    const baseArgs = [
-      `ytsearch${limit}:${query}`,
-      '--flat-playlist',
-      '--dump-json',
-      '--js-runtimes', 'node'
-    ];
-
-    const args = buildYtDlpArgs(baseArgs);
-    
-    const output = await runYtDlp(args);
-    const lines = output.trim().split('\n');
-    const results: YouTubeSearchResult[] = [];
-    
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const item = JSON.parse(line);
-        // Skip channel entries
-        if (item._type === 'playlist' || item._type === 'url') {
-          if (item.url && (item.url.includes('channel/') || item.url.includes('@'))) continue;
-        }
-        
-        const id = item.id || '';
-        const title = item.title || 'Unknown Title';
-        const url = item.url || `https://www.youtube.com/watch?v=${id}`;
-        const thumbnail = item.thumbnails?.[0]?.url || item.thumbnail || '';
-        const duration = item.duration || 0;
-        const durationString = item.duration_string || formatDuration(duration);
-        
-        results.push({
-          id,
-          title,
-          url,
-          thumbnail,
-          duration,
-          durationString
-        });
-      } catch {
-        // Skip individual parsing error
-      }
-    }
-    
-    return results;
-  } catch (err: any) {
-    logger.error(`searchYouTube via yt-dlp failed for query "${query}":`, err.message || err);
-    return [];
-  }
+  return [];
 }
 
 /**
@@ -240,7 +242,41 @@ export async function searchYouTube(query: string, limit: number = 5): Promise<Y
  * Falls back to yt-dlp if play-dl fails or if it's a non-YouTube URL.
  */
 export async function ytDlpGetMetadata(url: string): Promise<YouTubeSearchResult[]> {
-  // Try play-dl first for YouTube URLs
+  // Try yt-dlp first
+  try {
+    const baseArgs = [
+      url,
+      '--flat-playlist',
+      '--dump-json',
+      '--js-runtimes', 'node'
+    ];
+    const args = buildYtDlpArgs(baseArgs);
+    const output = await runYtDlp(args);
+    if (output) {
+      const lines = output.trim().split('\n');
+      const results: YouTubeSearchResult[] = [];
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const item = JSON.parse(line);
+          const id = item.id || '';
+          results.push({
+            id,
+            title: item.title || 'Unknown Title',
+            url: item.webpage_url || item.url || (id ? `https://www.youtube.com/watch?v=${id}` : url),
+            thumbnail: item.thumbnails?.[0]?.url || item.thumbnail || '',
+            duration: item.duration || 0,
+            durationString: item.duration_string || formatDuration(item.duration || 0)
+          });
+        } catch {}
+      }
+      if (results.length > 0) return results;
+    }
+  } catch (err: any) {
+    logger.warn(`ytDlpGetMetadata via yt-dlp failed: ${err.message}`);
+  }
+
+  // Fallback to play-dl
   if (url.includes('youtube.com') || url.includes('youtu.be')) {
     try {
       const type = await play.validate(url);
@@ -272,54 +308,8 @@ export async function ytDlpGetMetadata(url: string): Promise<YouTubeSearchResult
     }
   }
 
-  // Fallback to yt-dlp
-  try {
-    const baseArgs = [
-      url,
-      '--flat-playlist',
-      '--dump-json',
-      '--js-runtimes', 'node'
-    ];
-
-    const args = buildYtDlpArgs(baseArgs);
-    
-    const output = await runYtDlp(args);
-    const lines = output.trim().split('\n');
-    const results: YouTubeSearchResult[] = [];
-    
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const item = JSON.parse(line);
-        const id = item.id || '';
-        const title = item.title || 'Unknown Title';
-        const itemUrl = item.webpage_url || item.url || (id ? `https://www.youtube.com/watch?v=${id}` : url);
-        const thumbnail = item.thumbnails?.[0]?.url || item.thumbnail || '';
-        const duration = item.duration || 0;
-        const durationString = item.duration_string || formatDuration(duration);
-        
-        results.push({
-          id,
-          title,
-          url: itemUrl,
-          thumbnail,
-          duration,
-          durationString
-        });
-      } catch {
-        // Skip invalid line
-      }
-    }
-    
-    if (results.length === 0) {
-      throw new Error(`Không tìm thấy kết quả hoặc không thể parse metadata từ URL: ${url}`);
-    }
-    
-    return results;
-  } catch (err: any) {
-    logger.error(`ytDlpGetMetadata failed for URL "${url}":`, err.message || err);
-    throw err;
-  }
+  // Final error if all methods failed
+  throw new Error(`Không tìm thấy kết quả hoặc không thể parse metadata từ URL: ${url}`);
 }
 
 /**
@@ -371,30 +361,28 @@ export async function spawnYtDlpStream(url: string): Promise<Readable> {
  * falls back to yt-dlp if needed or for other sources.
  */
 export async function spawnStream(url: string): Promise<Readable> {
-  if (url.includes('youtube.com') || url.includes('youtu.be')) {
-    try {
-      logger.info(`Attempting play-dl stream for YouTube URL: ${url}`);
-      
-      // Try to use po_token if available in environment
-      const poToken = process.env.YT_PO_TOKEN;
-      const visitorData = process.env.YT_VISITOR_DATA;
-      
-      const streamOptions: any = {
-        quality: 2,
-        discordPlayerCompatibility: true,
-        // play-dl allows passing custom cookies and useragent via its global setToken,
-        // but we can also try to ensure it uses the best possible headers.
-      };
-      
-      const stream = await play.stream(url, streamOptions);
-      logger.success(`Successfully started play-dl stream for: ${url}`);
-      return stream.stream;
-    } catch (err: any) {
-      logger.warn(`play-dl stream failed, falling back to yt-dlp: ${err.message || err}`);
+  // Prioritize yt-dlp for streaming as it is currently more reliable for bypassing bot detection
+  // with custom extractor args and cookies.
+  try {
+    return await spawnYtDlpStream(url);
+  } catch (err: any) {
+    logger.warn(`yt-dlp primary stream failed for "${url}", trying play-dl fallback: ${err.message || err}`);
+    
+    if (url.includes('youtube.com') || url.includes('youtu.be')) {
+      try {
+        const streamOptions: any = {
+          quality: 2,
+          discordPlayerCompatibility: true
+        };
+        const stream = await play.stream(url, streamOptions);
+        return stream.stream;
+      } catch (playErr: any) {
+        logger.error(`Both yt-dlp and play-dl failed to stream "${url}":`, playErr.message || playErr);
+        throw playErr;
+      }
     }
+    throw err;
   }
-
-  return spawnYtDlpStream(url);
 }
 
 export const YouTubeSearch = {
