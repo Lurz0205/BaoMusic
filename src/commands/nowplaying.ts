@@ -56,22 +56,23 @@ export const nowplayingCommand = {
       }
     }
 
+    const color = track.source === 'spotify' ? '#1DB954' : (track.source === 'soundcloud' ? '#FF5500' : '#FF0000');
+
     const embed = new EmbedBuilder()
-      .setColor('#9B59B6')
-      .setTitle('🎶 Đang Phát')
-      .setDescription(`[${track.title}](${track.url})`)
+      .setColor(color)
+      .setAuthor({ name: '🎶 Đang Phát Ngay Bây Giờ' })
+      .setTitle(track.title)
+      .setURL(track.url)
+      .setDescription(progressString || `⏱️ \`${durationString}\``)
       .addFields(
         { name: 'Yêu cầu bởi', value: `👤 ${track.requestedBy.username}`, inline: true },
-        { name: 'Nguồn', value: `🔌 ${track.source.toUpperCase()}`, inline: true },
-        { name: 'Âm lượng', value: `🔊 ${queue.volume}%`, inline: true }
-      );
-
-    if (progressString) {
-      embed.addFields({ name: 'Tiến trình', value: progressString });
-    }
+        { name: 'Âm lượng', value: `🔊 ${queue.volume}%`, inline: true },
+        { name: 'Chế độ lặp', value: queue.loopMode === 'track' ? '🔂 Bài hát' : (queue.loopMode === 'queue' ? '🔁 Danh sách' : '▶️ Tắt'), inline: true }
+      )
+      .setFooter({ text: `Nguồn: ${track.source.toUpperCase()} • Bấm /queue để xem danh sách chờ` });
 
     if (track.thumbnail) {
-      embed.setThumbnail(track.thumbnail);
+      embed.setImage(track.thumbnail); // use setImage for larger thumbnail
     }
 
     await interaction.reply({ embeds: [embed] });

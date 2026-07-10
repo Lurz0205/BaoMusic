@@ -145,17 +145,17 @@ export default function App() {
     : '';
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans antialiased pb-12">
+    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans antialiased pb-12 selection:bg-indigo-500/30">
       {/* Upper Navigation Header */}
-      <header className="sticky top-0 z-30 w-full bg-white border-b border-slate-200/80 backdrop-blur-md bg-white/90">
+      <header className="sticky top-0 z-30 w-full bg-slate-900/80 border-b border-slate-800 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
+            <div className="p-2.5 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.15)]">
               <Music className="w-6 h-6 animate-pulse" />
             </div>
             <div>
-              <h1 className="text-lg font-bold tracking-tight text-slate-900">Discord Music Bot</h1>
-              <p className="text-xs text-slate-500 font-medium">Full-stack Management Dashboard</p>
+              <h1 className="text-lg font-bold tracking-tight text-white">Discord Music Bot</h1>
+              <p className="text-xs text-slate-400 font-medium">Cosmic Control Center</p>
             </div>
           </div>
           <div className="flex items-center space-x-2">
@@ -163,8 +163,8 @@ export default function App() {
               onClick={() => setActiveTab('status')}
               className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
                 activeTab === 'status' 
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100' 
-                  : 'text-slate-600 hover:bg-slate-50'
+                  ? 'bg-indigo-600 text-white shadow-[0_0_20px_rgba(79,70,229,0.3)] border border-indigo-500' 
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
               Trình phát & Trạng thái
@@ -173,8 +173,8 @@ export default function App() {
               onClick={() => setActiveTab('guide')}
               className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
                 activeTab === 'guide' 
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100' 
-                  : 'text-slate-600 hover:bg-slate-50'
+                  ? 'bg-indigo-600 text-white shadow-[0_0_20px_rgba(79,70,229,0.3)] border border-indigo-500' 
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
               Hướng dẫn Deploy
@@ -200,56 +200,56 @@ export default function App() {
         {/* Global Summary Status Indicators */}
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
           {/* Status Indicator Card */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200/70 shadow-sm flex items-center justify-between">
+          <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-md flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-xs text-slate-500 font-semibold tracking-wider uppercase">Kết nối bot</span>
+              <span className="text-xs text-slate-400 font-semibold tracking-wider uppercase">Kết nối bot</span>
               <div className="flex items-center space-x-2">
-                <span className={`w-2.5 h-2.5 rounded-full ${status?.online ? 'bg-emerald-500 animate-ping' : 'bg-rose-400'}`} />
-                <h3 className="text-base font-bold text-slate-900">
+                <span className={`w-2.5 h-2.5 rounded-full ${status?.online ? 'bg-emerald-400 animate-ping shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-rose-500'}`} />
+                <h3 className="text-base font-bold text-white">
                   {status?.online ? `@${status.username}` : 'Chưa kết nối'}
                 </h3>
               </div>
             </div>
-            <div className={`p-3 rounded-xl ${status?.online ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+            <div className={`p-3 rounded-xl border ${status?.online ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>
               <Wifi className="w-5 h-5" />
             </div>
           </div>
 
           {/* Latency Card */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200/70 shadow-sm flex items-center justify-between">
+          <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-md flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-xs text-slate-500 font-semibold tracking-wider uppercase">Độ trễ Gateway</span>
-              <h3 className="text-2xl font-black text-slate-900 font-mono">
+              <span className="text-xs text-slate-400 font-semibold tracking-wider uppercase">Độ trễ Gateway</span>
+              <h3 className="text-2xl font-black text-white font-mono">
                 {status?.online && status.latency >= 0 ? `${status.latency}ms` : 'N/A'}
               </h3>
             </div>
-            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+            <div className="p-3 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-500/20">
               <Activity className="w-5 h-5" />
             </div>
           </div>
 
           {/* Connected Guilds Count */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200/70 shadow-sm flex items-center justify-between">
+          <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-md flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-xs text-slate-500 font-semibold tracking-wider uppercase">Đang phục vụ</span>
-              <h3 className="text-2xl font-black text-slate-900 font-mono">
+              <span className="text-xs text-slate-400 font-semibold tracking-wider uppercase">Đang phục vụ</span>
+              <h3 className="text-2xl font-black text-white font-mono">
                 {status?.guildsCount || 0} Guilds
               </h3>
             </div>
-            <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+            <div className="p-3 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/20">
               <Disc className="w-5 h-5" />
             </div>
           </div>
 
           {/* Active Players Rooms Count */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200/70 shadow-sm flex items-center justify-between">
+          <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-md flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-xs text-slate-500 font-semibold tracking-wider uppercase">Phòng đang phát</span>
-              <h3 className="text-2xl font-black text-slate-900 font-mono">
+              <span className="text-xs text-slate-400 font-semibold tracking-wider uppercase">Phòng đang phát</span>
+              <h3 className="text-2xl font-black text-white font-mono">
                 {status?.activePlayersCount || 0} Kênh
               </h3>
             </div>
-            <div className="p-3 bg-cyan-50 text-cyan-600 rounded-xl">
+            <div className="p-3 bg-cyan-500/10 text-cyan-400 rounded-xl border border-cyan-500/20">
               <Compass className="w-5 h-5" />
             </div>
           </div>
@@ -301,12 +301,12 @@ export default function App() {
 
             {/* Quick action system buttons if configured */}
             {config?.isConfigured && (
-              <div className="flex flex-wrap gap-4 items-center bg-white p-5 rounded-2xl border border-slate-200/70 shadow-sm">
-                <div className="text-sm font-semibold text-slate-700 mr-2">Thao tác nhanh:</div>
+              <div className="flex flex-wrap gap-4 items-center bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-md">
+                <div className="text-sm font-semibold text-slate-300 mr-2">Thao tác nhanh:</div>
                 <button
                   onClick={handleDeployCommands}
                   disabled={loading}
-                  className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold text-xs px-4 py-2.5 rounded-lg transition-all duration-150 flex items-center gap-2 cursor-pointer"
+                  className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-xs px-4 py-2.5 rounded-lg transition-all duration-150 flex items-center gap-2 cursor-pointer shadow-[0_0_15px_rgba(79,70,229,0.3)] border border-indigo-500"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
                   Đồng bộ Slash Commands
@@ -314,7 +314,7 @@ export default function App() {
                 <button
                   onClick={handleRestartBot}
                   disabled={loading}
-                  className="bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 font-semibold text-xs px-4 py-2.5 rounded-lg transition-all duration-150 flex items-center gap-2 cursor-pointer"
+                  className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 font-semibold text-xs px-4 py-2.5 rounded-lg transition-all duration-150 flex items-center gap-2 cursor-pointer border border-slate-700"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   Kết nối lại Discord Bot
@@ -324,7 +324,7 @@ export default function App() {
                     href={inviteUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="ml-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg transition-all duration-150 flex items-center gap-1.5"
+                    className="ml-auto bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2.5 rounded-lg transition-all duration-150 flex items-center gap-1.5 shadow-[0_0_15px_rgba(52,211,153,0.3)] border border-emerald-500"
                   >
                     <Plus className="w-4 h-4" />
                     Mời Bot vào Server Discord
@@ -336,37 +336,37 @@ export default function App() {
             {/* Live active music rooms */}
             <div>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold tracking-tight text-slate-900">Các phòng Voice đang phát nhạc</h2>
-                <span className="text-xs font-semibold bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full border border-indigo-100">
+                <h2 className="text-xl font-bold tracking-tight text-white">Các phòng Voice đang phát nhạc</h2>
+                <span className="text-xs font-semibold bg-indigo-500/10 text-indigo-400 px-3 py-1 rounded-full border border-indigo-500/20 shadow-[0_0_10px_rgba(99,102,241,0.1)]">
                   {queues.length} Phòng hoạt động
                 </span>
               </div>
 
               {queues.length === 0 ? (
-                <div className="bg-white rounded-2xl border border-slate-200/70 p-12 text-center shadow-sm space-y-4">
-                  <div className="p-4 bg-slate-50 text-slate-400 rounded-full w-16 h-16 mx-auto flex items-center justify-center">
+                <div className="bg-slate-900 rounded-2xl border border-slate-800 p-12 text-center shadow-md space-y-4">
+                  <div className="p-4 bg-slate-800 text-slate-500 rounded-full w-16 h-16 mx-auto flex items-center justify-center border border-slate-700">
                     <Music className="w-8 h-8" />
                   </div>
                   <div className="space-y-1">
-                    <h4 className="text-base font-bold text-slate-800">Không có phòng Voice nào đang phát nhạc</h4>
-                    <p className="text-sm text-slate-500 max-w-md mx-auto">
-                      Hãy mời Bot vào phòng thoại và gõ lệnh slash **`/play [tên bài hát hoặc link]`** trong server Discord để bắt đầu trải nghiệm âm nhạc!
+                    <h4 className="text-base font-bold text-white">Không có phòng Voice nào đang phát nhạc</h4>
+                    <p className="text-sm text-slate-400 max-w-md mx-auto">
+                      Hãy mời Bot vào phòng thoại và gõ lệnh slash <strong className="text-indigo-400">/play [tên bài hát hoặc link]</strong> trong server Discord để bắt đầu!
                     </p>
                   </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-6">
                   {queues.map((room) => (
-                    <div key={room.guildId} className="bg-white rounded-2xl border border-slate-200/70 shadow-sm overflow-hidden grid grid-cols-1 lg:grid-cols-12">
+                    <div key={room.guildId} className="bg-slate-900 rounded-2xl border border-slate-800 shadow-lg overflow-hidden grid grid-cols-1 lg:grid-cols-12">
                       {/* Current track banner */}
-                      <div className="lg:col-span-5 bg-slate-900 text-slate-100 p-6 flex flex-col justify-between space-y-6 relative overflow-hidden">
+                      <div className="lg:col-span-5 bg-slate-950 text-slate-100 p-6 flex flex-col justify-between space-y-6 relative overflow-hidden">
                         {/* Decorative background overlay */}
-                        <div className="absolute inset-0 opacity-10 bg-cover bg-center" style={{ backgroundImage: room.currentTrack?.thumbnail ? `url(${room.currentTrack.thumbnail})` : 'none' }} />
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/80 to-transparent" />
+                        <div className="absolute inset-0 opacity-20 bg-cover bg-center filter blur-sm" style={{ backgroundImage: room.currentTrack?.thumbnail ? `url(${room.currentTrack.thumbnail})` : 'none' }} />
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/80 to-slate-900/40" />
 
                         <div className="relative z-10 flex items-center justify-between">
                           <div>
-                            <span className="text-xs bg-indigo-500/20 text-indigo-300 font-bold px-2.5 py-1 rounded-md border border-indigo-500/30">
+                            <span className="text-xs bg-indigo-500/20 text-indigo-300 font-bold px-2.5 py-1 rounded-md border border-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.2)]">
                               🔊 {room.channelName || 'Kênh Thoại'}
                             </span>
                           </div>
@@ -383,7 +383,7 @@ export default function App() {
                                   <img 
                                     src={room.currentTrack.thumbnail} 
                                     alt={room.currentTrack.title} 
-                                    className="w-20 h-20 rounded-xl object-cover shadow-lg border border-slate-700 flex-shrink-0"
+                                    className="w-20 h-20 rounded-xl object-cover shadow-lg border border-slate-800 flex-shrink-0"
                                     referrerPolicy="no-referrer"
                                   />
                                 )}
@@ -392,16 +392,16 @@ export default function App() {
                                     {room.currentTrack.title}
                                   </h4>
                                   <p className="text-xs text-slate-400 font-medium">
-                                    Yêu cầu bởi: <span className="text-indigo-300 font-semibold">{room.currentTrack.requestedBy.username}</span>
+                                    Yêu cầu bởi: <span className="text-indigo-400 font-semibold">{room.currentTrack.requestedBy.username}</span>
                                   </p>
                                 </div>
                               </div>
 
                               <div className="pt-2 space-y-1.5">
                                 {/* Simulated track bar */}
-                                <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden shadow-inner">
                                   <div 
-                                    className={`h-full bg-indigo-500 rounded-full ${room.isPlaying ? 'animate-pulse' : ''}`}
+                                    className={`h-full bg-indigo-500 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.8)] ${room.isPlaying ? 'animate-pulse' : ''}`}
                                     style={{ width: room.isPlaying ? '40%' : '0%' }}
                                   />
                                 </div>
@@ -412,7 +412,7 @@ export default function App() {
                               </div>
                             </>
                           ) : (
-                            <div className="text-slate-400 text-sm py-4 italic">Hàng đợi trống...</div>
+                            <div className="text-slate-500 text-sm py-4 italic">Hàng đợi trống...</div>
                           )}
                         </div>
 
@@ -470,17 +470,17 @@ export default function App() {
                       </div>
 
                       {/* Room settings and upcoming queues */}
-                      <div className="lg:col-span-7 p-6 flex flex-col justify-between bg-white border-l border-slate-100">
+                      <div className="lg:col-span-7 p-6 flex flex-col justify-between bg-slate-900 border-l border-slate-800">
                         <div className="space-y-5">
                           {/* Room State toggles: Loop, Autoplay, 24/7 */}
                           <div className="flex flex-wrap gap-3">
                             {/* Loop mode dropdown selector */}
-                            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 font-semibold gap-1.5">
+                            <div className="flex items-center bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-300 font-semibold gap-1.5 shadow-sm">
                               <span>Lặp:</span>
                               <select 
                                 value={room.loopMode}
                                 onChange={(e) => handleQueueControl(room.guildId, 'loop', e.target.value)}
-                                className="bg-transparent font-bold text-indigo-600 focus:outline-none cursor-pointer"
+                                className="bg-transparent font-bold text-indigo-400 focus:outline-none cursor-pointer"
                               >
                                 <option value="off">Off</option>
                                 <option value="track">Track (1 bài)</option>
@@ -491,10 +491,10 @@ export default function App() {
                             {/* Autoplay toggler */}
                             <button
                               onClick={() => handleQueueControl(room.guildId, 'autoplay', !room.autoplay)}
-                              className={`flex items-center px-3 py-1.5 rounded-xl text-xs font-bold border transition duration-150 cursor-pointer gap-1.5 ${
+                              className={`flex items-center px-3 py-1.5 rounded-xl text-xs font-bold border transition duration-150 cursor-pointer gap-1.5 shadow-sm ${
                                 room.autoplay 
-                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
-                                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
+                                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
                               }`}
                             >
                               <span>Autoplay:</span>
@@ -504,10 +504,10 @@ export default function App() {
                             {/* 24/7 toggler */}
                             <button
                               onClick={() => handleQueueControl(room.guildId, '247', !room.is247)}
-                              className={`flex items-center px-3 py-1.5 rounded-xl text-xs font-bold border transition duration-150 cursor-pointer gap-1.5 ${
+                              className={`flex items-center px-3 py-1.5 rounded-xl text-xs font-bold border transition duration-150 cursor-pointer gap-1.5 shadow-sm ${
                                 room.is247 
-                                  ? 'bg-indigo-50 border-indigo-200 text-indigo-700' 
-                                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                                  ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' 
+                                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
                               }`}
                             >
                               <span>Chế độ 24/7:</span>
@@ -517,17 +517,17 @@ export default function App() {
 
                           {/* Queue tracks list */}
                           <div className="space-y-2">
-                            <div className="text-xs font-bold tracking-wider text-slate-500 uppercase">Danh sách chờ sắp tới ({room.tracks.length} bài)</div>
+                            <div className="text-xs font-bold tracking-wider text-slate-400 uppercase">Danh sách chờ sắp tới ({room.tracks.length} bài)</div>
                             
                             {room.tracks.length <= 1 ? (
-                              <div className="text-slate-400 text-xs italic bg-slate-50 rounded-xl p-4 border border-dashed border-slate-200">
+                              <div className="text-slate-500 text-xs italic bg-slate-950/50 rounded-xl p-4 border border-dashed border-slate-700">
                                 Không có bài hát nào tiếp theo trong hàng đợi. Nhập thêm nhạc trong Discord!
                               </div>
                             ) : (
                               <div className="max-h-36 overflow-y-auto pr-1 space-y-1.5 custom-scrollbar">
                                 {room.tracks.slice(1, 6).map((t, idx) => (
-                                  <div key={idx} className="flex justify-between items-center text-xs bg-slate-50 border border-slate-100 rounded-lg p-2 hover:bg-slate-100/70 transition duration-100">
-                                    <span className="font-semibold text-slate-700 line-clamp-1 flex-1 pr-4">
+                                  <div key={idx} className="flex justify-between items-center text-xs bg-slate-800 border border-slate-700/50 rounded-lg p-2 hover:bg-slate-700 transition duration-100 shadow-sm">
+                                    <span className="font-semibold text-slate-300 line-clamp-1 flex-1 pr-4">
                                       {idx + 1}. {t.title}
                                     </span>
                                     <span className="text-[10px] font-mono text-slate-400 font-bold flex-shrink-0">
@@ -536,7 +536,7 @@ export default function App() {
                                   </div>
                                 ))}
                                 {room.tracks.length > 6 && (
-                                  <div className="text-[10px] text-center text-indigo-600 font-bold bg-indigo-50/40 py-1.5 rounded-lg border border-indigo-50/20">
+                                  <div className="text-[10px] text-center text-indigo-400 font-bold bg-indigo-500/10 py-1.5 rounded-lg border border-indigo-500/20">
                                     + {room.tracks.length - 6} bài hát khác trong hàng chờ
                                   </div>
                                 )}
@@ -555,93 +555,93 @@ export default function App() {
 
 
         {activeTab === 'guide' && (
-          <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm p-6 lg:p-8 space-y-8">
-            <div className="flex items-center space-x-3 pb-5 border-b border-slate-100">
-              <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+          <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-md p-6 lg:p-8 space-y-8">
+            <div className="flex items-center space-x-3 pb-5 border-b border-slate-800">
+              <div className="p-3 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-500/20">
                 <BookOpen className="w-6 h-6" />
               </div>
               <div>
-                <h2 className="text-xl font-bold tracking-tight text-slate-900">Hướng dẫn Deploy chi tiết từ A - Z</h2>
-                <p className="text-xs text-slate-500 font-medium">Các bước triển khai dự án lên Render Free Tier và thiết lập UptimeRobot ping</p>
+                <h2 className="text-xl font-bold tracking-tight text-white">Hướng dẫn Deploy chi tiết từ A - Z</h2>
+                <p className="text-xs text-slate-400 font-medium">Các bước triển khai dự án lên Render Free Tier và thiết lập UptimeRobot ping</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Step 1: Export project */}
-              <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200/50 space-y-3">
+              <div className="bg-slate-950/50 rounded-2xl p-5 border border-slate-800/80 space-y-3">
                 <div className="w-8 h-8 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center shadow-md">
                   1
                 </div>
-                <h4 className="text-sm font-bold text-slate-900">Đưa dự án lên GitHub</h4>
-                <p className="text-xs text-slate-500 leading-relaxed">
+                <h4 className="text-sm font-bold text-white">Đưa dự án lên GitHub</h4>
+                <p className="text-xs text-slate-400 leading-relaxed">
                   Tải dự án về máy của bạn qua tùy chọn ZIP trong menu cài đặt AI Studio, khởi tạo một repository trên GitHub và đẩy mã nguồn lên đó.
                 </p>
               </div>
 
               {/* Step 2: Deploy to Render */}
-              <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200/50 space-y-3">
+              <div className="bg-slate-950/50 rounded-2xl p-5 border border-slate-800/80 space-y-3">
                 <div className="w-8 h-8 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center shadow-md">
                   2
                 </div>
-                <h4 className="text-sm font-bold text-slate-900">Tạo Web Service trên Render</h4>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Liên kết tài khoản GitHub với Render.com. Chọn <strong>New +</strong> &gt; <strong>Web Service</strong>. Chọn repository chứa bot nhạc của bạn.
+                <h4 className="text-sm font-bold text-white">Tạo Web Service trên Render</h4>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Liên kết tài khoản GitHub với Render.com. Chọn <strong className="text-slate-300">New +</strong> &gt; <strong className="text-slate-300">Web Service</strong>. Chọn repository chứa bot nhạc của bạn.
                 </p>
               </div>
 
               {/* Step 3: Setup UptimeRobot */}
-              <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200/50 space-y-3">
+              <div className="bg-slate-950/50 rounded-2xl p-5 border border-slate-800/80 space-y-3">
                 <div className="w-8 h-8 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center shadow-md">
                   3
                 </div>
-                <h4 className="text-sm font-bold text-slate-900">Giữ bot online 24/7</h4>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Đăng ký tài khoản UptimeRobot. Thêm monitor kiểu **HTTPS**, trỏ về link Web Service của Render với chu kỳ 5 phút/lần để tránh ngủ đông.
+                <h4 className="text-sm font-bold text-white">Giữ bot online 24/7</h4>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Đăng ký tài khoản UptimeRobot. Thêm monitor kiểu <strong className="text-slate-300">HTTPS</strong>, trỏ về link Web Service của Render với chu kỳ 5 phút/lần.
                 </p>
               </div>
             </div>
 
             {/* Render Settings Details Section */}
             <div className="space-y-4">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Terminal className="w-5 h-5 text-indigo-600" />
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Terminal className="w-5 h-5 text-indigo-400" />
                 Cấu hình thông số trên Render.com
               </h3>
 
-              <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+              <div className="overflow-x-auto rounded-xl border border-slate-800 shadow-md">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 font-bold text-slate-700">
+                    <tr className="bg-slate-950/50 border-b border-slate-800 font-bold text-slate-300">
                       <th className="p-3.5">Trường thông tin</th>
                       <th className="p-3.5">Giá trị cấu hình</th>
                       <th className="p-3.5 text-right">Hành động</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 font-medium text-slate-600">
+                  <tbody className="divide-y divide-slate-800/60 font-medium text-slate-400">
                     <tr>
-                      <td className="p-3.5 font-bold text-slate-800">Language (Runtime)</td>
-                      <td className="p-3.5 font-mono bg-slate-50/50">Node</td>
+                      <td className="p-3.5 font-bold text-slate-300">Language (Runtime)</td>
+                      <td className="p-3.5 font-mono bg-slate-950/20 text-slate-400">Node</td>
                       <td className="p-3.5 text-right"></td>
                     </tr>
                     <tr>
-                      <td className="p-3.5 font-bold text-slate-800">Build Command</td>
-                      <td className="p-3.5 font-mono bg-slate-50/50">npm install && npm run build</td>
+                      <td className="p-3.5 font-bold text-slate-300">Build Command</td>
+                      <td className="p-3.5 font-mono bg-slate-950/20 text-slate-400">npm install && npm run build</td>
                       <td className="p-3.5 text-right">
                         <button 
                           onClick={() => copyToClipboard('npm install && npm run build', 'build_cmd')}
-                          className="text-indigo-600 hover:text-indigo-700 font-bold text-[10px]"
+                          className="text-indigo-400 hover:text-indigo-300 font-bold text-[10px]"
                         >
                           {copiedText === 'build_cmd' ? 'Đã sao chép!' : 'Sao chép'}
                         </button>
                       </td>
                     </tr>
                     <tr>
-                      <td className="p-3.5 font-bold text-slate-800">Start Command</td>
-                      <td className="p-3.5 font-mono bg-slate-50/50">npm start</td>
+                      <td className="p-3.5 font-bold text-slate-300">Start Command</td>
+                      <td className="p-3.5 font-mono bg-slate-950/20 text-slate-400">npm start</td>
                       <td className="p-3.5 text-right">
                         <button 
                           onClick={() => copyToClipboard('npm start', 'start_cmd')}
-                          className="text-indigo-600 hover:text-indigo-700 font-bold text-[10px]"
+                          className="text-indigo-400 hover:text-indigo-300 font-bold text-[10px]"
                         >
                           {copiedText === 'start_cmd' ? 'Đã sao chép!' : 'Sao chép'}
                         </button>
@@ -654,49 +654,49 @@ export default function App() {
 
             {/* Environmental variables configurations */}
             <div className="space-y-4">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Settings className="w-5 h-5 text-indigo-600" />
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Settings className="w-5 h-5 text-indigo-400" />
                 Cấu hình Biến môi trường (Environment Variables)
               </h3>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Tại tab <strong>Environment</strong> trên Render, nhấn vào <strong>Add Environment Variable</strong> và thêm các biến sau:
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Tại tab <strong className="text-slate-300">Environment</strong> trên Render, nhấn vào <strong className="text-slate-300">Add Environment Variable</strong> và thêm các biến sau:
               </p>
 
-              <div className="bg-slate-900 text-slate-300 font-mono text-xs rounded-xl p-5 border border-slate-800 shadow-md space-y-2.5">
+              <div className="bg-slate-950 text-slate-300 font-mono text-xs rounded-xl p-5 border border-slate-800 shadow-inner space-y-2.5">
                 <div>
-                  <span className="text-amber-400">BOT_TOKEN</span> = <span className="text-slate-100">"Mã Token Discord Bot của bạn"</span>
+                  <span className="text-emerald-400">BOT_TOKEN</span> = <span className="text-slate-100">"Mã Token Discord Bot của bạn"</span>
                 </div>
                 <div>
-                  <span className="text-amber-400">CLIENT_ID</span> = <span className="text-slate-100">"Mã Client ID của bạn"</span>
+                  <span className="text-emerald-400">CLIENT_ID</span> = <span className="text-slate-100">"Mã Client ID của bạn"</span>
                 </div>
                 <div>
-                  <span className="text-amber-400">NODE_ENV</span> = <span className="text-slate-100">"production"</span>
+                  <span className="text-emerald-400">NODE_ENV</span> = <span className="text-slate-100">"production"</span>
                 </div>
                 <div>
-                  <span className="text-amber-400">PORT</span> = <span className="text-slate-100">3000</span>
+                  <span className="text-emerald-400">PORT</span> = <span className="text-slate-100">3000</span>
                 </div>
               </div>
             </div>
 
             {/* UptimeRobot Detailed configuration guidelines */}
-            <div className="space-y-4 pt-4 border-t border-slate-100 leading-relaxed">
-              <h3 className="text-base font-bold text-slate-900">⏰ Chi tiết tích hợp UptimeRobot</h3>
-              <div className="text-xs text-slate-500 space-y-3">
+            <div className="space-y-4 pt-4 border-t border-slate-800 leading-relaxed">
+              <h3 className="text-base font-bold text-white">⏰ Chi tiết tích hợp UptimeRobot</h3>
+              <div className="text-xs text-slate-400 space-y-3">
                 <p>
                   Render Free Tier có chế độ tự động dừng dịch vụ (ngủ đông) sau 15 phút không nhận được lưu lượng truy cập mạng nào. Điều này sẽ làm bot bị ngắt kết nối. Để duy trì bot hoạt động 24/7, hãy làm như sau:
                 </p>
-                <ol className="list-decimal list-inside space-y-2 pl-1.5 font-medium text-slate-600">
-                  <li>Đăng ký tài khoản miễn phí tại trang <a href="https://uptimerobot.com" target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline font-bold">UptimeRobot.com</a>.</li>
-                  <li>Click vào nút <strong>+ Add New Monitor</strong> ở góc bên trái.</li>
+                <ol className="list-decimal list-inside space-y-2 pl-1.5 font-medium text-slate-400">
+                  <li>Đăng ký tài khoản miễn phí tại trang <a href="https://uptimerobot.com" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline font-bold">UptimeRobot.com</a>.</li>
+                  <li>Click vào nút <strong className="text-slate-300">+ Add New Monitor</strong> ở góc bên trái.</li>
                   <li>Thiết lập các trường thông tin:
                     <ul className="list-disc list-inside space-y-1.5 pl-5 mt-1 text-slate-500">
-                      <li><strong>Monitor Type:</strong> Chọn <code className="bg-slate-50 px-1.5 py-0.5 rounded border">HTTPS</code>.</li>
-                      <li><strong>Friendly Name:</strong> Đặt tên dễ nhớ (ví dụ: <code className="bg-slate-50 px-1.5 py-0.5 rounded border">Discord Music Bot</code>).</li>
-                      <li><strong>URL (or IP):</strong> Nhập địa chỉ link Web Service của Render (ví dụ: <code className="bg-slate-50 px-1.5 py-0.5 rounded border">https://ten-bot-cua-ban.onrender.com/</code>).</li>
-                      <li><strong>Monitoring Interval:</strong> Chọn thanh trượt <code className="bg-slate-50 px-1.5 py-0.5 rounded border">Every 5 minutes</code> (Mỗi 5 phút).</li>
+                      <li><strong className="text-slate-300">Monitor Type:</strong> Chọn <code className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">HTTPS</code>.</li>
+                      <li><strong className="text-slate-300">Friendly Name:</strong> Đặt tên dễ nhớ (ví dụ: <code className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">Discord Music Bot</code>).</li>
+                      <li><strong className="text-slate-300">URL (or IP):</strong> Nhập địa chỉ link Web Service của Render.</li>
+                      <li><strong className="text-slate-300">Monitoring Interval:</strong> Chọn thanh trượt <code className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">Every 5 minutes</code>.</li>
                     </ul>
                   </li>
-                  <li>Click <strong>Create Monitor</strong> để hoàn tất. UptimeRobot sẽ gửi request ping định kỳ để giữ cho máy chủ Web Service của Render luôn thức tỉnh và phát nhạc ổn định!</li>
+                  <li>Click <strong className="text-slate-300">Create Monitor</strong> để hoàn tất. UptimeRobot sẽ gửi request ping định kỳ để giữ cho máy chủ không bị ngủ đông!</li>
                 </ol>
               </div>
             </div>

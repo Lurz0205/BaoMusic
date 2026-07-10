@@ -145,11 +145,12 @@ export async function runYtDlp(args: string[]): Promise<string> {
  * Searches for YouTube videos and returns a list of results.
  * Uses play-dl primarily for speed, falls back to yt-dlp if needed.
  */
-export async function searchYouTube(query: string, limit: number = 5): Promise<YouTubeSearchResult[]> {
+export async function searchYouTube(query: string, limit: number = 5, platform: string = 'youtube'): Promise<YouTubeSearchResult[]> {
   // 1. Try yt-dlp first (most reliable for search results when cookies are involved)
   try {
+    const searchPrefix = platform === 'soundcloud' ? `scsearch${limit}:` : `ytsearch${limit}:`;
     const baseArgs = [
-      `ytsearch${limit}:${query}`,
+      `${searchPrefix}${query}`,
       '--flat-playlist',
       '--dump-json',
       '--js-runtimes', 'node'
@@ -352,34 +353,31 @@ export async function spawnYtDlpStream(url: string): Promise<Readable> {
  * falls back to yt-dlp if needed or for other sources.
  */
 export async function spawnStream(url: string): Promise<Readable> {
-  // Prioritize yt-dlp for streaming as it is currently more reliable for bypassing bot detection
-  // with custom extractor args and cookies.
-  try {
-    return await spawnYtDlpStream(url);
-  } catch (err: any) {
-    logger.warn(`yt-dlp primary stream failed for "${url}", trying play-dl fallback: ${err.message || err}`);
-    
-    if (url.includes('youtube.com') || url.includes('youtu.be')) {
-      try {
-        const streamOptions: any = {
-          quality: 2,
-          discordPlayerCompatibility: true
-        };
-        const stream = await play.stream(url, streamOptions);
-        return stream.stream;
-      } catch (playErr: any) {
-        logger.error(`Both yt-dlp and play-dl failed to stream "${url}":`, playErr.message || playErr);
-        throw playErr;
-      }
+  if (url.includes('youtube.com') || url.includes('youtu.be')) {
+    try {
+      logger.info(`Attempting play-dl stream for YouTube URL: ${url}`);
+      
+      const streamOptions: any = {
+        quality: 2,
+        discordPlayerCompatibility: true
+      };
+      
+      const stream = await play.stream(url, streamOptions);
+      logger.info(`Successfully started play-dl stream for: ${url}`);
+      return stream.stream;
+    } catch (err: any) {
+      logger.warn(`play-dl stream failed, falling back to yt-dlp: ${err.message || err}`);
     }
-    throw err;
   }
+
+  return spawnYtDlpStream(url);
 }
 
 export const YouTubeSearch = {
-  async search(query: string, options?: { limit?: number }) {
+  async search(query: string, options?: { limit?: number; platform?: string }) {
     const limit = options?.limit || 5;
-    const results = await searchYouTube(query, limit);
+    const platform = options?.platform || 'youtube';
+    const results = await searchYouTube(query, limit, platform);
     return results.map(r => ({
       title: r.title,
       url: r.url,
@@ -389,8 +387,8 @@ export const YouTubeSearch = {
     }));
   },
   
-  async searchOne(query: string) {
-    const results = await this.search(query, { limit: 1 });
+  async searchOne(query: string, platform: string = 'youtube') {
+    const results = await this.search(query, { limit: 1, platform });
     return results.length > 0 ? results[0] : null;
   },
 

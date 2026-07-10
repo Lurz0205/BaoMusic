@@ -23,6 +23,17 @@ export const playCommand = {
         .setDescription('Tên bài hát, link YouTube, Spotify, hoặc SoundCloud.')
         .setRequired(true)
         .setAutocomplete(true)
+    )
+    .addStringOption((option) =>
+      option
+        .setName('platform')
+        .setDescription('Nền tảng tìm kiếm (Mặc định: YouTube)')
+        .setRequired(false)
+        .addChoices(
+          { name: 'YouTube', value: 'youtube' },
+          { name: 'SoundCloud', value: 'soundcloud' },
+          { name: 'Spotify', value: 'spotify' }
+        )
     ),
 
   /**
@@ -79,6 +90,7 @@ export const playCommand = {
     }
 
     const input = interaction.options.getString('input', true);
+    const platform = interaction.options.getString('platform') || 'youtube';
     await interaction.deferReply();
 
     try {
@@ -110,7 +122,7 @@ export const playCommand = {
         avatarUrl: interaction.user.displayAvatarURL() || undefined,
       };
 
-      const tracks = await Track.from(input, requester);
+      const tracks = await Track.from(input, requester, platform);
 
       if (tracks.length === 0) {
         return interaction.editReply('❌ Không thể tìm thấy hoặc xử lý bài hát từ yêu cầu của bạn.');
@@ -121,31 +133,42 @@ export const playCommand = {
 
       if (tracks.length > 1) {
         // Playlist added embed
+        const firstTrackSource = tracks[0].source;
+        const color = firstTrackSource === 'spotify' ? '#1DB954' : (firstTrackSource === 'soundcloud' ? '#FF5500' : '#FF0000');
         const embed = new EmbedBuilder()
-          .setColor('#2ECC71')
-          .setTitle('📚 Đã thêm Playlist vào hàng đợi')
-          .setDescription(`Đã nạp thành công **${tracks.length}** bài hát vào hàng chờ.`)
+          .setColor(color)
+          .setAuthor({ name: '📚 Đã thêm Playlist vào hàng đợi' })
+          .setTitle(`Đã nạp thành công ${tracks.length} bài hát`)
           .addFields(
             { name: 'Kênh phát', value: `🔊 ${voiceChannel.name}`, inline: true },
-            { name: 'Yêu cầu bởi', value: `👤 ${interaction.user.username}`, inline: true }
+            { name: 'Yêu cầu bởi', value: `👤 ${interaction.user.username}`, inline: true },
+            { name: 'Nguồn', value: `🔌 ${firstTrackSource.toUpperCase()}`, inline: true }
           )
+          .setFooter({ text: `Bot âm nhạc cao cấp • Hàng đợi hiện có: ${queue.tracks.length} bài` })
           .setTimestamp();
+
+        if (tracks[0].thumbnail) {
+          embed.setThumbnail(tracks[0].thumbnail);
+        }
 
         await interaction.editReply({ embeds: [embed] });
       } else {
         // Single track added embed
         const track = tracks[0];
         const isNowPlaying = queue.currentTrack === track;
+        const color = track.source === 'spotify' ? '#1DB954' : (track.source === 'soundcloud' ? '#FF5500' : '#FF0000');
 
         const embed = new EmbedBuilder()
-          .setColor(isNowPlaying ? '#1DB954' : '#3498DB')
-          .setTitle(isNowPlaying ? '🎶 Đang phát' : '📥 Đã thêm vào hàng chờ')
-          .setDescription(`[${track.title}](${track.url})`)
+          .setColor(color)
+          .setAuthor({ name: isNowPlaying ? '🎶 Đang phát ngay bây giờ' : '📥 Đã thêm vào hàng chờ', iconURL: requester.avatarUrl })
+          .setTitle(track.title)
+          .setURL(track.url)
+          .setDescription(`⏱️ \`${track.durationString}\``)
           .addFields(
-            { name: 'Thời lượng', value: `⏱️ ${track.durationString}`, inline: true },
-            { name: 'Nguồn', value: `🔌 ${track.source.toUpperCase()}`, inline: true },
-            { name: 'Yêu cầu bởi', value: `👤 ${interaction.user.username}`, inline: true }
-          );
+            { name: 'Yêu cầu bởi', value: `👤 ${interaction.user.username}`, inline: true },
+            { name: 'Nguồn', value: `🔌 ${track.source.toUpperCase()}`, inline: true }
+          )
+          .setFooter({ text: `Vị trí trong hàng đợi: ${queue.tracks.length > 0 ? queue.tracks.length - 1 : 0}` });
 
         if (track.thumbnail) {
           embed.setThumbnail(track.thumbnail);

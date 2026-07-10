@@ -96,7 +96,8 @@ export class Track implements TrackData {
    */
   public static async from(
     input: string,
-    requestedBy: { username: string; avatarUrl?: string }
+    requestedBy: { username: string; avatarUrl?: string },
+    platform: string = 'youtube'
   ): Promise<Track[]> {
     const cleanInput = input.trim();
 
@@ -198,9 +199,9 @@ export class Track implements TrackData {
     }
 
     // 3. Search query (fallback)
-    logger.info(`Searching YouTube via yt-dlp for query: "${cleanInput}"`);
+    logger.info(`Searching via yt-dlp for query: "${cleanInput}" (platform: ${platform})`);
     try {
-      const searchResults = await searchYouTube(cleanInput, 1);
+      const searchResults = await searchYouTube(cleanInput, 1, platform);
       if (searchResults && searchResults.length > 0) {
         const v = searchResults[0];
         return [new Track({
@@ -210,7 +211,7 @@ export class Track implements TrackData {
           duration: v.duration,
           durationString: v.durationString,
           requestedBy,
-          source: 'youtube'
+          source: platform as any
         })];
       }
     } catch (err: any) {
