@@ -11,8 +11,10 @@ export const autoplayCommand = {
         .setRequired(true)),
 
   async execute(interaction: ChatInputCommandInteraction) {
+    logger.info(`autoplay command executed for guildId: ${interaction.guildId}`);
     const queue = playerManager.get(interaction.guildId || '');
     if (!queue) {
+      logger.info(`Autoplay failed: queue exists? ${!!queue}`);
       return interaction.editReply({
         content: '❌ Bot phải ở trong một kênh thoại để kích hoạt chế độ này! Gõ `/join` hoặc `/play` trước.',
       });

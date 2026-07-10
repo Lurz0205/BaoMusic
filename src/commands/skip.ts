@@ -7,8 +7,10 @@ export const skipCommand = {
     .setDescription('Bỏ qua bài hát đang phát hiện tại.'),
 
   async execute(interaction: ChatInputCommandInteraction) {
+    logger.info(`skip command executed for guildId: ${interaction.guildId}`);
     const queue = playerManager.get(interaction.guildId || '');
     if (!queue || !queue.currentTrack) {
+      logger.info(`Skip failed: queue exists? ${!!queue}, currentTrack exists? ${!!queue?.currentTrack}`);
       return interaction.reply({
         content: '❌ Không có bài hát nào đang phát để bỏ qua!',
         ephemeral: true,

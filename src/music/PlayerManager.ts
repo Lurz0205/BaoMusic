@@ -22,6 +22,7 @@ export class PlayerManager {
    * Retrieves an active guild queue.
    */
   public get(guildId: string): GuildQueue | undefined {
+    logger.info(`PlayerManager.get called for guildId: ${guildId}. Queues size: ${this.queues.size}`);
     return this.queues.get(guildId);
   }
 
@@ -43,6 +44,7 @@ export class PlayerManager {
     channelName: string,
     textChannelId?: string
   ): GuildQueue {
+    logger.info(`PlayerManager.create called for guildId: ${guildId}, guildName: ${guildName}`);
     // If existing queue exists, destroy it first
     const existing = this.queues.get(guildId);
     if (existing) {
