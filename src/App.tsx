@@ -486,11 +486,11 @@ export default function App() {
                                 <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden shadow-inner">
                                   <div 
                                     className={`h-full bg-indigo-500 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.8)] ${room.isPlaying ? 'animate-pulse' : ''}`}
-                                    style={{ width: room.isPlaying ? '40%' : '0%' }}
+                                    style={{ width: `${room.currentTrack.duration > 0 ? Math.min((room.playbackDuration / room.currentTrack.duration) * 100, 100) : 0}%` }}
                                   />
                                 </div>
                                 <div className="flex justify-between text-[10px] font-mono text-slate-400 font-semibold">
-                                  <span>{room.isPlaying ? '01:45' : '00:00'}</span>
+                                  <span>{new Date(room.playbackDuration * 1000).toISOString().substr(11, 8).replace(/^00:/, '')}</span>
                                   <span>{room.currentTrack.durationString}</span>
                                 </div>
                               </div>

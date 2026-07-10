@@ -47,6 +47,7 @@ export class GuildQueue {
 
   private nowPlayingMessage: Message | null = null;
   public playbackDuration = 0;
+  private playbackInterval: NodeJS.Timeout | null = null;
   
   private isTransitioningPrevious = false;
   private readonly onDestroy?: () => void;
@@ -75,7 +76,7 @@ export class GuildQueue {
     this.setupConnectionListeners();
     
     // Start tracking duration
-    setInterval(() => {
+    this.playbackInterval = setInterval(() => {
       if (this.player.state.status === AudioPlayerStatus.Playing && this.currentResource) {
         this.playbackDuration = Math.floor(this.currentResource.playbackDuration / 1000);
       }
@@ -216,17 +217,21 @@ export class GuildQueue {
               embed.setThumbnail(track.thumbnail);
             }
 
-            const row = new ActionRowBuilder<ButtonBuilder>()
+            const row1 = new ActionRowBuilder<ButtonBuilder>()
               .addComponents(
                 new ButtonBuilder().setCustomId('control_previous').setLabel('⏮️').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('control_pause_resume').setLabel('⏸️/▶️').setStyle(ButtonStyle.Primary),
                 new ButtonBuilder().setCustomId('control_skip').setLabel('⏭️').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('control_loop').setLabel('🔁').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('control_loop').setLabel('🔁').setStyle(ButtonStyle.Secondary)
+              );
+
+            const row2 = new ActionRowBuilder<ButtonBuilder>()
+              .addComponents(
                 new ButtonBuilder().setCustomId('control_volume_down').setLabel('🔉').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('control_volume_up').setLabel('🔊').setStyle(ButtonStyle.Secondary)
               );
 
-            const msg = await (channel as any).send({ embeds: [embed], components: [row] });
+            const msg = await (channel as any).send({ embeds: [embed], components: [row1, row2] });
             this.nowPlayingMessage = msg;
           }
         }
@@ -576,6 +581,7 @@ export class GuildQueue {
     logger.music(`Destroying GuildQueue for "${this.guildName}"`, 'destroy');
     this.clearIdleLeaveTimer();
     if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
+    if (this.playbackInterval) clearInterval(this.playbackInterval);
     
     this.tracks = [];
     this.previousTracks = [];
