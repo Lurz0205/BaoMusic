@@ -36,6 +36,10 @@ export default function App() {
     cookiePath: string;
     tokenSet: boolean;
   } | null>(null);
+  const [guilds, setGuilds] = useState<Array<{id: string, name: string, channels: Array<{id: string, name: string}>}>>([]);
+  const [selectedGuild, setSelectedGuild] = useState<{id: string, name: string, channels: Array<{id: string, name: string}>} | null>(null);
+  const [selectedChannelId, setSelectedChannelId] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // UI states
   const [activeTab, setActiveTab] = useState<'status' | 'guide'>('status');
@@ -43,13 +47,44 @@ export default function App() {
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
+  // Perform a play command
+  const handlePlay = async () => {
+    if (!selectedGuild || !selectedChannelId || !searchQuery) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/music/play', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          guildId: selectedGuild.id, 
+          query: searchQuery, 
+          voiceChannelId: selectedChannelId 
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        triggerAlert('success', data.message);
+        setSearchQuery('');
+        fetchData();
+      } else {
+        triggerAlert('error', data.message || 'Lỗi phát nhạc.');
+      }
+    } catch (err: any) {
+      triggerAlert('error', `Lỗi kết nối: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Fetch initial data
   const fetchData = async () => {
     try {
-      const [statusRes, queuesRes, configRes] = await Promise.all([
+      const [statusRes, queuesRes, configRes, guildsRes] = await Promise.all([
         fetch('/api/status'),
         fetch('/api/queues'),
-        fetch('/api/config')
+        fetch('/api/config'),
+        fetch('/api/guilds')
       ]);
 
       if (statusRes.ok) setStatus(await statusRes.json());
@@ -58,6 +93,7 @@ export default function App() {
         const conf = await configRes.json();
         setConfig(conf);
       }
+      if (guildsRes.ok) setGuilds(await guildsRes.json());
     } catch (err) {
       console.error('Failed to fetch data from Express backend:', err);
     }
@@ -301,35 +337,76 @@ export default function App() {
 
             {/* Quick action system buttons if configured */}
             {config?.isConfigured && (
-              <div className="flex flex-wrap gap-4 items-center bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-md">
-                <div className="text-sm font-semibold text-slate-300 mr-2">Thao tác nhanh:</div>
-                <button
-                  onClick={handleDeployCommands}
-                  disabled={loading}
-                  className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-xs px-4 py-2.5 rounded-lg transition-all duration-150 flex items-center gap-2 cursor-pointer shadow-[0_0_15px_rgba(79,70,229,0.3)] border border-indigo-500"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-                  Đồng bộ Slash Commands
-                </button>
-                <button
-                  onClick={handleRestartBot}
-                  disabled={loading}
-                  className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 font-semibold text-xs px-4 py-2.5 rounded-lg transition-all duration-150 flex items-center gap-2 cursor-pointer border border-slate-700"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  Kết nối lại Discord Bot
-                </button>
-                {inviteUrl && (
-                  <a
-                    href={inviteUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ml-auto bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2.5 rounded-lg transition-all duration-150 flex items-center gap-1.5 shadow-[0_0_15px_rgba(52,211,153,0.3)] border border-emerald-500"
+              <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-md space-y-4">
+                <div className="flex flex-wrap gap-4 items-center">
+                  <div className="text-sm font-semibold text-slate-300 mr-2">Thao tác nhanh:</div>
+                  <button
+                    onClick={handleDeployCommands}
+                    disabled={loading}
+                    className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-xs px-4 py-2.5 rounded-lg transition-all duration-150 flex items-center gap-2 cursor-pointer shadow-[0_0_15px_rgba(79,70,229,0.3)] border border-indigo-500"
                   >
-                    <Plus className="w-4 h-4" />
-                    Mời Bot vào Server Discord
-                  </a>
-                )}
+                    <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                    Đồng bộ Slash Commands
+                  </button>
+                  <button
+                    onClick={handleRestartBot}
+                    disabled={loading}
+                    className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 font-semibold text-xs px-4 py-2.5 rounded-lg transition-all duration-150 flex items-center gap-2 cursor-pointer border border-slate-700"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Kết nối lại Discord Bot
+                  </button>
+                  {inviteUrl && (
+                    <a
+                      href={inviteUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-auto bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2.5 rounded-lg transition-all duration-150 flex items-center gap-1.5 shadow-[0_0_15px_rgba(52,211,153,0.3)] border border-emerald-500"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Mời Bot vào Server Discord
+                    </a>
+                  )}
+                </div>
+
+                {/* Music Search & Join */}
+                <div className="border-t border-slate-800 pt-4 mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <select 
+                    onChange={(e) => { 
+                      const g = guilds.find(g => g.id === e.target.value);
+                      setSelectedGuild(g || null);
+                      setSelectedChannelId('');
+                    }}
+                    className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200"
+                  >
+                    <option value="">Chọn Server</option>
+                    {guilds.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                  </select>
+                  <select 
+                    value={selectedChannelId}
+                    onChange={(e) => setSelectedChannelId(e.target.value)}
+                    className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200"
+                  >
+                    <option value="">Chọn kênh thoại</option>
+                    {selectedGuild?.channels.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <div className="flex gap-2 md:col-span-3">
+                    <input 
+                      type="text" 
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Tìm nhạc hoặc dán link..."
+                      className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                    />
+                    <button 
+                      onClick={handlePlay}
+                      disabled={loading || !selectedGuild || !selectedChannelId || !searchQuery}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-4 py-2 rounded-lg text-sm"
+                    >
+                      Phát
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 

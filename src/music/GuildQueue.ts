@@ -67,7 +67,7 @@ export class GuildQueue {
       }
     }, 1000);
   }
-[diff_block_end]
+
 
 
   /**

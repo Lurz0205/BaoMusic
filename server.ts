@@ -106,6 +106,30 @@ PORT=${config.port}
     res.json(getBotStatus());
   });
 
+  app.post('/api/restart-bot', async (req, res) => {
+    try {
+      await stopBot();
+      await startBot();
+      res.json({ success: true, message: 'Đã khởi động lại bot' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.get('/api/guilds', (req, res) => {
+    const client = getBotClient();
+    if (!client) return res.status(503).json({ success: false, message: 'Bot chưa kết nối' });
+    
+    const guilds = client.guilds.cache.map(guild => ({
+      id: guild.id,
+      name: guild.name,
+      channels: guild.channels.cache
+        .filter(c => c.type === 2) // ChannelType.GuildVoice
+        .map(c => ({ id: c.id, name: c.name }))
+    }));
+    res.json(guilds);
+  });
+
   // Retrieve active players queues states
   app.get('/api/queues', (req, res) => {
     res.json(playerManager.listStates());
@@ -170,9 +194,59 @@ PORT=${config.port}
   app.post('/api/music/play', async (req, res) => {
     const { guildId, query, voiceChannelId } = req.body;
     if (!guildId || !query) return res.status(400).json({ success: false, message: 'Thiếu thông tin!' });
-    // This will need access to bot client and play logic...
-    // Simplest: use playerManager to get or create guild queue, and play track
-    res.status(501).json({ success: false, message: 'Chưa triển khai' });
+    
+    // Use playerManager to get/create queue
+    // Need to handle voice channel joining
+    try {
+      const client = getBotClient();
+      if (!client) throw new Error('Bot chưa kết nối!');
+      
+      const guild = client.guilds.cache.get(guildId);
+      if (!guild) throw new Error('Không tìm thấy server!');
+      
+      let queue = playerManager.get(guildId);
+      
+      if (!queue) {
+        if (!voiceChannelId) throw new Error('Thiếu kênh thoại để join!');
+        
+        // This mimics join command
+        const { joinVoiceChannel } = await import('@discordjs/voice');
+        const channel = guild.channels.cache.get(voiceChannelId);
+        if (!channel || channel.type !== 2) throw new Error('Kênh thoại không hợp lệ!');
+        
+        const connection = joinVoiceChannel({
+          channelId: channel.id,
+          guildId: guild.id,
+          adapterCreator: guild.voiceAdapterCreator,
+        });
+        
+        queue = playerManager.create(guild.id, guild.name, connection, channel.id, channel.name);
+      }
+      
+      // Now play
+      const { Track } = await import('./src/music/Track.js');
+      const { searchYouTube } = await import('./src/utils/youtube-search.js');
+      
+      const results = await searchYouTube(query, 1, 'youtube');
+      if (results.length === 0) throw new Error('Không tìm thấy kết quả!');
+      
+      const track = new Track({
+        title: results[0].title,
+        url: results[0].url,
+        thumbnail: results[0].thumbnail || '',
+        duration: results[0].duration,
+        durationString: results[0].durationString,
+        requestedBy: { username: 'Dashboard' },
+        source: 'youtube',
+      });
+      
+      queue.addTracks([track]);
+      
+      res.json({ success: true, message: `Đã thêm: ${track.title}` });
+    } catch (err: any) {
+      logger.error('API Play Error:', err);
+      res.status(500).json({ success: false, message: err.message });
+    }
   });
 
   // Deploy Slash Commands API
