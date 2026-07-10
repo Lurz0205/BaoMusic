@@ -36,12 +36,12 @@ export const playCommand = {
 
     try {
       // Use play-dl primarily for autocomplete as it is much faster
-      // Add a 2.5s timeout as Discord requires response within 3s
+      // Discord requires response within 3 seconds.
       let results: any[] = [];
       try {
         const playSearchPromise = play.search(focusedValue, { limit: 10 });
         const timeoutPromise = new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('Autocomplete timeout')), 2500)
+          setTimeout(() => reject(new Error('Autocomplete timeout')), 2200) // Slightly under 3s to be safe
         );
 
         const playResults = await Promise.race([playSearchPromise, timeoutPromise]);
@@ -51,18 +51,8 @@ export const playCommand = {
           durationRaw: v.durationRaw
         }));
       } catch (err: any) {
-        logger.warn('Autocomplete via play-dl failed or timed out, falling back to yt-dlp search:', err.message || err);
-        // Fallback to yt-dlp search if play-dl fails or times out
-        try {
-          const ytSrResults = await YouTubeSearch.search(focusedValue, { limit: 6 });
-          results = ytSrResults.map(v => ({
-            title: v.title,
-            url: v.url,
-            durationRaw: v.durationFormatted
-          }));
-        } catch (subErr: any) {
-          logger.error('Autocomplete search fallback failed:', subErr.message || subErr);
-        }
+        logger.warn('Autocomplete via play-dl failed or timed out:', err.message || err);
+        // Do NOT fall back to yt-dlp here, it's too slow for autocomplete
       }
       
       const choices = results.slice(0, 25).map((video) => {

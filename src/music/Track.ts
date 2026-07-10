@@ -128,10 +128,35 @@ export class Track implements TrackData {
           })];
         }
       } catch (err: any) {
-        logger.warn(`Spotify metadata parsing via play-dl failed, falling back to YouTube search:`, err.message || err);
-        // Fallback: If it's a track URL, we can try to search YouTube using the URL itself
-        // yt-dlp is actually quite good at finding YouTube matches for Spotify URLs if the right plugins/configs are there,
-        // but here we just search YouTube with the URL which often works or we just try to get metadata via yt-dlp directly.
+        logger.warn(`Spotify metadata parsing via play-dl failed, trying oEmbed fallback:`, err.message || err);
+        
+        try {
+          // Attempt to get title via Spotify oEmbed (works without API keys)
+          const oEmbedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(cleanInput)}`;
+          const response = await fetch(oEmbedUrl);
+          if (response.ok) {
+            const data: any = await response.json();
+            const title = data.title || 'Unknown Spotify Track';
+            
+            // Search YouTube with the extracted title
+            logger.info(`Searching YouTube for Spotify track: "${title}"`);
+            const results = await YouTubeSearch.search(title, { limit: 1 });
+            
+            return results.map(item => new Track({
+              title: item.title,
+              url: item.url,
+              thumbnail: item.thumbnail.url,
+              duration: item.duration / 1000,
+              durationString: item.durationFormatted,
+              requestedBy,
+              source: 'spotify'
+            }));
+          }
+        } catch (oEmbedErr) {
+          logger.error(`Spotify oEmbed fallback also failed:`, oEmbedErr);
+        }
+
+        // Final fallback: use yt-dlp metadata directly if it somehow works
         try {
           const results = await ytDlpGetMetadata(cleanInput);
           return results.map(item => new Track({
@@ -144,8 +169,8 @@ export class Track implements TrackData {
             source: 'spotify'
           }));
         } catch (ytErr: any) {
-          logger.error(`yt-dlp fallback also failed for Spotify URL:`, ytErr.message || ytErr);
-          throw new Error(`Không thể lấy thông tin bài hát từ Spotify (Thiếu API Key hoặc Link không hợp lệ).`);
+          logger.error(`Final yt-dlp fallback also failed for Spotify URL:`, ytErr.message || ytErr);
+          throw new Error(`Không thể lấy thông tin bài hát từ Spotify. Vui lòng kiểm tra lại link hoặc sử dụng link YouTube.`);
         }
       }
     }

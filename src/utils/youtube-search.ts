@@ -4,6 +4,7 @@ import { logger } from './logger.js';
 import { execFile, spawn, execSync } from 'child_process';
 import path from 'path';
 import { Readable } from 'stream';
+import play from 'play-dl';
 
 export interface YouTubeSearchResult {
   id: string;
@@ -74,7 +75,8 @@ function buildYtDlpArgs(baseArgs: string[]): string[] {
   args.push('--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
   args.push('--force-ipv4');
   args.push('--no-check-certificates');
-  args.push('--extractor-args', 'youtube:player-client=web,android');
+  // Use multiple clients to increase success rate
+  args.push('--extractor-args', 'youtube:player-client=web,android,mweb');
 
   const proxy = process.env.YT_PROXY;
   if (proxy) {
@@ -123,9 +125,28 @@ export async function runYtDlp(args: string[]): Promise<string> {
 }
 
 /**
- * Searches YouTube using yt-dlp's fast search options.
+ * Searches for YouTube videos and returns a list of results.
+ * Uses play-dl primarily for speed, falls back to yt-dlp if needed.
  */
 export async function searchYouTube(query: string, limit: number = 5): Promise<YouTubeSearchResult[]> {
+  // Try play-dl first (much faster)
+  try {
+    const playResults = await play.search(query, { limit, source: { youtube: 'video' } });
+    if (playResults && playResults.length > 0) {
+      return playResults.map(v => ({
+        id: v.id || '',
+        title: v.title || 'Unknown Title',
+        url: v.url,
+        thumbnail: v.thumbnails[0]?.url || '',
+        duration: v.durationInSec,
+        durationString: v.durationRaw || formatDuration(v.durationInSec)
+      }));
+    }
+  } catch (err: any) {
+    logger.warn(`play-dl search failed, falling back to yt-dlp: ${err.message || err}`);
+  }
+
+  // Fallback to yt-dlp
   try {
     const baseArgs = [
       `ytsearch${limit}:${query}`,
@@ -178,8 +199,42 @@ export async function searchYouTube(query: string, limit: number = 5): Promise<Y
 
 /**
  * Fetches metadata for an individual video or a playlist using yt-dlp.
+ * Falls back to yt-dlp if play-dl fails or if it's a non-YouTube URL.
  */
 export async function ytDlpGetMetadata(url: string): Promise<YouTubeSearchResult[]> {
+  // Try play-dl first for YouTube URLs
+  if (url.includes('youtube.com') || url.includes('youtu.be')) {
+    try {
+      const type = await play.validate(url);
+      if (type === 'yt_video') {
+        const videoInfo = await play.video_basic_info(url);
+        const v = videoInfo.video_details;
+        return [{
+          id: v.id || '',
+          title: v.title || 'Unknown Title',
+          url: v.url,
+          thumbnail: v.thumbnails[0]?.url || '',
+          duration: v.durationInSec,
+          durationString: v.durationRaw || formatDuration(v.durationInSec)
+        }];
+      } else if (type === 'yt_playlist') {
+        const playlistInfo = await play.playlist_info(url, { incomplete: true });
+        const videos = await playlistInfo.all_videos();
+        return videos.map(v => ({
+          id: v.id || '',
+          title: v.title || 'Unknown Title',
+          url: v.url,
+          thumbnail: v.thumbnails[0]?.url || '',
+          duration: v.durationInSec,
+          durationString: v.durationRaw || formatDuration(v.durationInSec)
+        }));
+      }
+    } catch (err: any) {
+      logger.warn(`play-dl metadata fetch failed, falling back to yt-dlp: ${err.message || err}`);
+    }
+  }
+
+  // Fallback to yt-dlp
   try {
     const baseArgs = [
       url,
