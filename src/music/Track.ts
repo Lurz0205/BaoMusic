@@ -2,7 +2,7 @@ import play from 'play-dl';
 import { createAudioResource, AudioResource, StreamType } from '@discordjs/voice';
 import { TrackData } from '../types.js';
 import { logger } from '../utils/logger.js';
-import { YouTubeSearch, ytDlpGetMetadata, spawnYtDlpStream, searchYouTube } from '../utils/youtube-search.js';
+import { YouTubeSearch, ytDlpGetMetadata, spawnYtDlpStream, searchYouTube, spawnStream } from '../utils/youtube-search.js';
 
 export class Track implements TrackData {
   public readonly title: string;
@@ -55,9 +55,9 @@ export class Track implements TrackData {
         }
       }
 
-      // Stream the audio using yt-dlp (works for both YouTube, SoundCloud, etc.!)
-      logger.info(`Creating audio stream via yt-dlp for: "${this.title}" (${finalUrl})`);
-      const stream = await spawnYtDlpStream(finalUrl);
+      // Stream the audio using play-dl (with yt-dlp fallback)
+      logger.info(`Creating audio stream for: "${this.title}" (${finalUrl})`);
+      const stream = await spawnStream(finalUrl);
 
       const resource = createAudioResource(stream, {
         inputType: StreamType.Arbitrary,

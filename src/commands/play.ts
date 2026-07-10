@@ -6,7 +6,7 @@ import {
   EmbedBuilder 
 } from 'discord.js';
 import { joinVoiceChannel } from '@discordjs/voice';
-import YouTubeSR from 'youtube-sr';
+import { YouTube } from 'youtube-sr';
 import { playerManager } from '../music/PlayerManager.js';
 import { Track } from '../music/Track.js';
 import { logger } from '../utils/logger.js';
@@ -37,7 +37,7 @@ export const playCommand = {
     try {
       // Use youtube-sr for autocomplete as it is robust and fast
       // Discord requires response within 3 seconds.
-      const searchResults = await YouTubeSR.search(focusedValue, { limit: 10, type: 'video' });
+      const searchResults = await YouTube.search(focusedValue, { limit: 10, type: 'video' });
       
       const choices = searchResults.slice(0, 25).map((video) => {
         const title = video.title || 'Unknown Title';

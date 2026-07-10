@@ -41,21 +41,26 @@ export const config = {
   token: rawToken,
   clientId: resolvedClientId,
   port: parseInt(process.env.PORT || '3000', 10),
-  cookiePath: process.env.COOKIE_PATH || path.join(ROOT_DIR, 'cookies', 'cookie.txt'),
+  cookiePath: process.env.COOKIE_PATH || 'cookies/cookie.txt',
   
   // Helper to check if credentials are valid
   get isConfigured(): boolean {
     return this.token.length > 0 && this.clientId.length > 0;
   },
   
-  // Helper to check if cookies file exists
+  // Helper to check if cookies file exists (checks both root and src/ for project structure flexibility)
   get hasCookies(): boolean {
     try {
-      const resolvedPath = path.isAbsolute(this.cookiePath) 
-        ? this.cookiePath 
-        : path.join(ROOT_DIR, this.cookiePath);
-        
-      return fs.existsSync(resolvedPath);
+      const resolved = this.absoluteCookiePath;
+      if (fs.existsSync(resolved)) return true;
+      
+      // Secondary check for src/cookies if not found in root (Render-specific sometimes)
+      if (!path.isAbsolute(this.cookiePath)) {
+        const srcPath = path.join(ROOT_DIR, 'src', this.cookiePath);
+        if (fs.existsSync(srcPath)) return true;
+      }
+      
+      return false;
     } catch {
       return false;
     }
@@ -63,9 +68,19 @@ export const config = {
 
   // Get resolved absolute cookies path
   get absoluteCookiePath(): string {
-    return path.isAbsolute(this.cookiePath)
+    const primary = path.isAbsolute(this.cookiePath)
       ? this.cookiePath
       : path.join(ROOT_DIR, this.cookiePath);
+    
+    if (fs.existsSync(primary)) return primary;
+
+    // Fallback to src/cookies
+    if (!path.isAbsolute(this.cookiePath)) {
+      const secondary = path.join(ROOT_DIR, 'src', this.cookiePath);
+      if (fs.existsSync(secondary)) return secondary;
+    }
+
+    return primary;
   }
 };
 

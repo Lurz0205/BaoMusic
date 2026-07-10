@@ -5,7 +5,7 @@ import { execFile, spawn, execSync } from 'child_process';
 import path from 'path';
 import { Readable } from 'stream';
 import play from 'play-dl';
-import YouTubeSR from 'youtube-sr';
+import { YouTube } from 'youtube-sr';
 
 export interface YouTubeSearchResult {
   id: string;
@@ -58,7 +58,13 @@ function buildYtDlpArgs(baseArgs: string[]): string[] {
   const args = [...baseArgs];
 
   if (config.hasCookies) {
-    args.push('--cookies', config.absoluteCookiePath);
+    if (fs.existsSync(config.absoluteCookiePath)) {
+      const stats = fs.statSync(config.absoluteCookiePath);
+      logger.info(`Using cookies from ${config.absoluteCookiePath} (Size: ${stats.size} bytes)`);
+      args.push('--cookies', config.absoluteCookiePath);
+    } else {
+      logger.warn(`Cookie path ${config.absoluteCookiePath} configured but file not found.`);
+    }
   }
 
   const poToken = process.env.YT_PO_TOKEN;
@@ -74,15 +80,15 @@ function buildYtDlpArgs(baseArgs: string[]): string[] {
   args.push('--add-header', 'Accept-Language:en-US,en;q=0.9');
 
   // Build extractor args correctly by combining them
-  // Putting android and ios clients first as they are often more permissive
-  const extractorArgsParts = ['youtube:player-client=android,ios,mweb,web'];
+  // Putting tv, tvhtml5, android and ios clients first as they are often more permissive
+  const extractorArgsParts = ['youtube:player-client=tv,tvhtml5,android,ios,mweb,web'];
   
   if (poToken) {
     // Format required: web+TOKEN for web client, but po_token works for others too
     const formattedPoToken = poToken.startsWith('web+') ? poToken : `web+${poToken}`;
-    extractorArgsParts.push(`po_token=${formattedPoToken}`);
+    args.push('--extractor-args', `youtube:po_token=${formattedPoToken}`);
     if (visitorData) {
-      extractorArgsParts.push(`visitor_data=${visitorData}`);
+      args.push('--extractor-args', `youtube:visitor_data=${visitorData}`);
     }
   }
   
@@ -141,7 +147,7 @@ export async function runYtDlp(args: string[]): Promise<string> {
 export async function searchYouTube(query: string, limit: number = 5): Promise<YouTubeSearchResult[]> {
   // Try youtube-sr first (robust and fast for search)
   try {
-    const srResults = await YouTubeSR.search(query, { limit, type: 'video' });
+    const srResults = await YouTube.search(query, { limit, type: 'video' });
     if (srResults && srResults.length > 0) {
       return srResults.map(v => ({
         id: v.id || '',
@@ -354,6 +360,29 @@ export async function spawnYtDlpStream(url: string): Promise<Readable> {
   return child.stdout;
 }
 
+/**
+ * Spawns an audio stream process.
+ * Tries play-dl first for YouTube URLs as it is often more resilient,
+ * falls back to yt-dlp if needed or for other sources.
+ */
+export async function spawnStream(url: string): Promise<Readable> {
+  if (url.includes('youtube.com') || url.includes('youtu.be')) {
+    try {
+      logger.info(`Attempting play-dl stream for YouTube URL: ${url}`);
+      const stream = await play.stream(url, {
+        quality: 2,
+        discordPlayerCompatibility: true
+      });
+      logger.success(`Successfully started play-dl stream for: ${url}`);
+      return stream.stream;
+    } catch (err: any) {
+      logger.warn(`play-dl stream failed, falling back to yt-dlp: ${err.message || err}`);
+    }
+  }
+
+  return spawnYtDlpStream(url);
+}
+
 export const YouTubeSearch = {
   async search(query: string, options?: { limit?: number }) {
     const limit = options?.limit || 5;
@@ -370,5 +399,7 @@ export const YouTubeSearch = {
   async searchOne(query: string) {
     const results = await this.search(query, { limit: 1 });
     return results.length > 0 ? results[0] : null;
-  }
+  },
+
+  spawnStream
 };
