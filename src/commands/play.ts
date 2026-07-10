@@ -35,19 +35,20 @@ export const playCommand = {
     }
 
     try {
-      // Limit to 6 results for speedy retrieval
+      // Prioritize YouTubeSearch (yt-dlp) as it uses PO Token and is more reliable on Render
       let results: any[] = [];
       try {
-        results = await play.search(focusedValue, { limit: 6 });
-      } catch (err) {
-        // Fallback to custom YouTubeSearch
+        const ytSrResults = await YouTubeSearch.search(focusedValue, { limit: 6 });
+        results = ytSrResults.map(v => ({
+          title: v.title,
+          url: v.url,
+          durationRaw: v.durationFormatted
+        }));
+      } catch (err: any) {
+        // Fallback to play.search
         try {
-          const ytSrResults = await YouTubeSearch.search(focusedValue, { limit: 6 });
-          results = ytSrResults.map(v => ({
-            title: v.title,
-            url: v.url,
-            durationRaw: v.durationFormatted
-          }));
+          const playResults = await play.search(focusedValue, { limit: 6 });
+          results = playResults;
         } catch (subErr: any) {
           logger.error('Autocomplete search fallback failed:', subErr.message || subErr);
         }

@@ -128,8 +128,25 @@ export class Track implements TrackData {
           })];
         }
       } catch (err: any) {
-        logger.error(`Spotify metadata parsing failed:`, err.message || err);
-        throw new Error(`Không thể lấy thông tin bài hát từ Spotify: ${err.message || err}`);
+        logger.warn(`Spotify metadata parsing via play-dl failed, falling back to YouTube search:`, err.message || err);
+        // Fallback: If it's a track URL, we can try to search YouTube using the URL itself
+        // yt-dlp is actually quite good at finding YouTube matches for Spotify URLs if the right plugins/configs are there,
+        // but here we just search YouTube with the URL which often works or we just try to get metadata via yt-dlp directly.
+        try {
+          const results = await ytDlpGetMetadata(cleanInput);
+          return results.map(item => new Track({
+            title: item.title,
+            url: item.url,
+            thumbnail: item.thumbnail,
+            duration: item.duration,
+            durationString: item.durationString,
+            requestedBy,
+            source: 'spotify'
+          }));
+        } catch (ytErr: any) {
+          logger.error(`yt-dlp fallback also failed for Spotify URL:`, ytErr.message || ytErr);
+          throw new Error(`Không thể lấy thông tin bài hát từ Spotify (Thiếu API Key hoặc Link không hợp lệ).`);
+        }
       }
     }
 

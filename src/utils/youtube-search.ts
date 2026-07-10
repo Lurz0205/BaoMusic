@@ -127,7 +127,7 @@ export async function searchYouTube(query: string, limit: number = 5): Promise<Y
     const poToken = process.env.YT_PO_TOKEN || DEFAULT_PO_TOKEN;
     const visitorData = process.env.YT_VISITOR_DATA || DEFAULT_VISITOR_DATA;
     if (poToken) {
-      const val = visitorData ? `${poToken}~${visitorData}` : poToken;
+      const val = visitorData ? `${visitorData}+${poToken}` : poToken;
       args.push('--extractor-args', `youtube:po_token=${val}`);
     }
 
@@ -197,7 +197,7 @@ export async function ytDlpGetMetadata(url: string): Promise<YouTubeSearchResult
     const poToken = process.env.YT_PO_TOKEN || DEFAULT_PO_TOKEN;
     const visitorData = process.env.YT_VISITOR_DATA || DEFAULT_VISITOR_DATA;
     if (poToken) {
-      const val = visitorData ? `${poToken}~${visitorData}` : poToken;
+      const val = visitorData ? `${visitorData}+${poToken}` : poToken;
       args.push('--extractor-args', `youtube:po_token=${val}`);
     }
 
@@ -268,7 +268,7 @@ export async function spawnYtDlpStream(url: string): Promise<Readable> {
   const poToken = process.env.YT_PO_TOKEN || DEFAULT_PO_TOKEN;
   const visitorData = process.env.YT_VISITOR_DATA || DEFAULT_VISITOR_DATA;
   if (poToken) {
-    const val = visitorData ? `${poToken}~${visitorData}` : poToken;
+    const val = visitorData ? `${visitorData}+${poToken}` : poToken;
     args.push('--extractor-args', `youtube:po_token=${val}`);
   }
 
