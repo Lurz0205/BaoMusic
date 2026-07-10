@@ -6,7 +6,7 @@ import {
   EmbedBuilder 
 } from 'discord.js';
 import { joinVoiceChannel } from '@discordjs/voice';
-import play from 'play-dl';
+import YouTubeSR from 'youtube-sr';
 import { playerManager } from '../music/PlayerManager.js';
 import { Track } from '../music/Track.js';
 import { logger } from '../utils/logger.js';
@@ -26,7 +26,7 @@ export const playCommand = {
 
   /**
    * Slash command autocomplete search suggestion handler.
-   * Leverages play-dl YouTube search API with debounce and limit.
+   * Leverages youtube-sr for reliable and fast suggestions.
    */
   async autocomplete(interaction: AutocompleteInteraction) {
     const focusedValue = interaction.options.getFocused();
@@ -35,38 +35,26 @@ export const playCommand = {
     }
 
     try {
-      // Use play-dl primarily for autocomplete as it is much faster
+      // Use youtube-sr for autocomplete as it is robust and fast
       // Discord requires response within 3 seconds.
-      let results: any[] = [];
-      try {
-        const playSearchPromise = play.search(focusedValue, { limit: 10 });
-        const timeoutPromise = new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('Autocomplete timeout')), 2200) // Slightly under 3s to be safe
-        );
-
-        const playResults = await Promise.race([playSearchPromise, timeoutPromise]);
-        results = playResults.map((v: any) => ({
-          title: v.title,
-          url: v.url,
-          durationRaw: v.durationRaw
-        }));
-      } catch (err: any) {
-        logger.warn('Autocomplete via play-dl failed or timed out:', err.message || err);
-        // Do NOT fall back to yt-dlp here, it's too slow for autocomplete
-      }
+      const searchResults = await YouTubeSR.search(focusedValue, { limit: 10, type: 'video' });
       
-      const choices = results.slice(0, 25).map((video) => {
+      const choices = searchResults.slice(0, 25).map((video) => {
         const title = video.title || 'Unknown Title';
         const formattedTitle = title.length > 95 ? title.slice(0, 92) + '...' : title;
         return {
-          name: `${formattedTitle} (${video.durationRaw || 'Live'})`,
+          name: `${formattedTitle} (${video.durationFormatted || 'Live'})`,
           value: video.url,
         };
       });
 
       await interaction.respond(choices);
-    } catch (err) {
-      // Fail silently
+    } catch (err: any) {
+      logger.warn('Autocomplete via youtube-sr failed:', err.message || err);
+      // Fail silently for interaction
+      try {
+        await interaction.respond([]);
+      } catch (e) {}
     }
   },
 

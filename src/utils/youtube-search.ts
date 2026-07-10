@@ -5,6 +5,7 @@ import { execFile, spawn, execSync } from 'child_process';
 import path from 'path';
 import { Readable } from 'stream';
 import play from 'play-dl';
+import YouTubeSR from 'youtube-sr';
 
 export interface YouTubeSearchResult {
   id: string;
@@ -63,20 +64,29 @@ function buildYtDlpArgs(baseArgs: string[]): string[] {
   const poToken = process.env.YT_PO_TOKEN;
   const visitorData = process.env.YT_VISITOR_DATA;
 
-  if (poToken) {
-    // Format required: web+TOKEN
-    args.push('--extractor-args', `youtube:po_token=web+${poToken}`);
-    if (visitorData) {
-      args.push('--extractor-args', `youtube:visitor_data=${visitorData}`);
-    }
-  }
-
   // Common flags to bypass blocks
-  args.push('--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
+  const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+  args.push('--user-agent', userAgent);
   args.push('--force-ipv4');
   args.push('--no-check-certificates');
-  // Use multiple clients to increase success rate
-  args.push('--extractor-args', 'youtube:player-client=web,android,mweb');
+  args.push('--geo-bypass');
+  args.push('--referer', 'https://www.youtube.com/');
+  args.push('--add-header', 'Accept-Language:en-US,en;q=0.9');
+
+  // Build extractor args correctly by combining them
+  // Putting android and ios clients first as they are often more permissive
+  const extractorArgsParts = ['youtube:player-client=android,ios,mweb,web'];
+  
+  if (poToken) {
+    // Format required: web+TOKEN for web client, but po_token works for others too
+    const formattedPoToken = poToken.startsWith('web+') ? poToken : `web+${poToken}`;
+    extractorArgsParts.push(`po_token=${formattedPoToken}`);
+    if (visitorData) {
+      extractorArgsParts.push(`visitor_data=${visitorData}`);
+    }
+  }
+  
+  args.push('--extractor-args', extractorArgsParts.join(';'));
 
   const proxy = process.env.YT_PROXY;
   if (proxy) {
@@ -129,7 +139,24 @@ export async function runYtDlp(args: string[]): Promise<string> {
  * Uses play-dl primarily for speed, falls back to yt-dlp if needed.
  */
 export async function searchYouTube(query: string, limit: number = 5): Promise<YouTubeSearchResult[]> {
-  // Try play-dl first (much faster)
+  // Try youtube-sr first (robust and fast for search)
+  try {
+    const srResults = await YouTubeSR.search(query, { limit, type: 'video' });
+    if (srResults && srResults.length > 0) {
+      return srResults.map(v => ({
+        id: v.id || '',
+        title: v.title || 'Unknown Title',
+        url: v.url,
+        thumbnail: v.thumbnail?.url || '',
+        duration: v.duration / 1000,
+        durationString: v.durationFormatted || formatDuration(v.duration / 1000)
+      }));
+    }
+  } catch (err: any) {
+    logger.warn(`youtube-sr search failed: ${err.message || err}`);
+  }
+
+  // Fallback to play-dl
   try {
     const playResults = await play.search(query, { limit, source: { youtube: 'video' } });
     if (playResults && playResults.length > 0) {
