@@ -19,7 +19,6 @@ const YTDLP_PATH = path.join(ROOT_DIR, 'bin', 'yt-dlp');
 
 /**
  * Đảm bảo yt-dlp tồn tại và có quyền thực thi.
- * Nếu file bị lỗi (như lỗi SyntaxError PK trên Render), nó sẽ cố gắng tải lại bản chuẩn.
  */
 async function ensureYtDlp(): Promise<string> {
   const binDir = path.join(ROOT_DIR, 'bin');
@@ -27,46 +26,63 @@ async function ensureYtDlp(): Promise<string> {
     fs.mkdirSync(binDir, { recursive: true });
   }
 
-  // Kiểm tra xem file có chạy được không
-  let needsDownload = !fs.existsSync(YTDLP_PATH);
-  
-  if (!needsDownload) {
+  // Nếu file chưa tồn tại, tải về
+  if (!fs.existsSync(YTDLP_PATH)) {
+    logger.info('Downloading yt-dlp binary (ELF linux)...');
+    const url = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux';
     try {
-      // Thử chạy --version để kiểm tra tính toàn vẹn
-      execSync(`"${YTDLP_PATH}" --version`, { stdio: 'ignore' });
-    } catch (err) {
-      logger.warn('yt-dlp binary exists but is not working. Attempting to download a fresh copy...');
-      needsDownload = true;
-    }
-  }
-
-  if (needsDownload) {
-    logger.info('Downloading latest yt-dlp binary for Linux...');
-    const url = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
-    
-    try {
-      // Sử dụng curl hoặc wget (thường có sẵn trên Render/Linux)
       execSync(`curl -L ${url} -o "${YTDLP_PATH}"`, { stdio: 'inherit' });
       fs.chmodSync(YTDLP_PATH, 0o755);
-      logger.info('yt-dlp downloaded and permissions set.');
     } catch (err) {
-      logger.error('Failed to download yt-dlp via curl:', err);
-      throw new Error('Could not prepare yt-dlp binary. Please ensure curl is installed.');
+      logger.error('Failed to download yt-dlp:', err);
+      throw new Error('Could not download yt-dlp. Please install it manually in ./bin/yt-dlp');
     }
   } else {
-    // Đảm bảo quyền thực thi kể cả khi file đã tồn tại
-    const stats = fs.statSync(YTDLP_PATH);
-    if ((stats.mode & fs.constants.S_IXUSR) === 0) {
+    // Đảm bảo quyền thực thi
+    try {
       fs.chmodSync(YTDLP_PATH, 0o755);
+    } catch (err) {
+      // Ignored
     }
   }
 
   return YTDLP_PATH;
 }
 
-// Hardcoded PO Token & Visitor Data for fallback/default usage
-const DEFAULT_PO_TOKEN = 'MlWhNcrk5yPATaELnTfvHxmyJKakOlVFwds0rub0sf7WS0SCCaIK9dL';
-const DEFAULT_VISITOR_DATA = 'CgtQSEdTMU5EWEt2VSjt58DSBjIKCgJWThIEGgAgEmLfAgrcAjE5LllUPU5kSGFaU3M3VmdhT243NnIzdFk2aW1kNHB6aWdCTFpueVJ6NkkyMnpDUmFrQ0xfdGlRUk0zTWJiNEFVem1xNk1wS1A2d3BLMGVTQnJjREtmZlVxMEJHY0N3WWMwU0NnYWw0MVJUUkJERW9wVXpQRFBONV93aHZ3Wl9kdDgxWndSZUEzWUt3UzIybWRWbjFWVEtIYXpCazMzNTZhelhyUklMakU2Mmx2aU5UR3VYWVI2cFFaYXM2OHJyeW1wOTJOcTNzTVBXekdBaHg2eVJkYWh4UnQ5bHN5d3MzNGlwR0RZRXVtaHFxcXlwVnFyQU83Q1dHMFRJeFBISXNQUGNXWHNLOG5QSS10SjR5dE5nWTBIWDh3aVBkVGVjbGNVazNKMXQ5bFZPa05fS3AzYWlFOTdULVNlYUNFR3d4dlNUbU5rUHphUGhEdDRCQkJfS1FKOGpGbE16UQ';
+/**
+ * Helper to build yt-dlp arguments with cookies and PO Token
+ */
+function buildYtDlpArgs(baseArgs: string[]): string[] {
+  const args = [...baseArgs];
+
+  if (config.hasCookies) {
+    args.push('--cookies', config.absoluteCookiePath);
+  }
+
+  const poToken = process.env.YT_PO_TOKEN;
+  const visitorData = process.env.YT_VISITOR_DATA;
+
+  if (poToken) {
+    // Format required: web+TOKEN
+    args.push('--extractor-args', `youtube:po_token=web+${poToken}`);
+    if (visitorData) {
+      args.push('--extractor-args', `youtube:visitor_data=${visitorData}`);
+    }
+  }
+
+  // Common flags to bypass blocks
+  args.push('--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
+  args.push('--force-ipv4');
+  args.push('--no-check-certificates');
+  args.push('--extractor-args', 'youtube:player-client=web,android');
+
+  const proxy = process.env.YT_PROXY;
+  if (proxy) {
+    args.push('--proxy', proxy);
+  }
+
+  return args;
+}
 
 function formatDuration(durationSec: number): string {
   if (isNaN(durationSec) || durationSec <= 0) return '0:00';
@@ -111,41 +127,14 @@ export async function runYtDlp(args: string[]): Promise<string> {
  */
 export async function searchYouTube(query: string, limit: number = 5): Promise<YouTubeSearchResult[]> {
   try {
-    const args = [
+    const baseArgs = [
       `ytsearch${limit}:${query}`,
       '--flat-playlist',
       '--dump-json',
       '--js-runtimes', 'node'
     ];
 
-    // Pass cookies if configured and exists
-    if (config.hasCookies) {
-      args.push('--cookies', config.absoluteCookiePath);
-    }
-
-    // Pass PO Token if configured
-    const poToken = process.env.YT_PO_TOKEN || DEFAULT_PO_TOKEN;
-    const visitorData = process.env.YT_VISITOR_DATA || DEFAULT_VISITOR_DATA;
-    if (poToken) {
-      // Use the format suggested by yt-dlp warnings: CLIENT.CONTEXT+PO_TOKEN
-      args.push('--extractor-args', `youtube:po_token=web+${poToken}`);
-      if (visitorData) {
-        args.push('--extractor-args', `youtube:visitor_data=${visitorData}`);
-      }
-    }
-
-    // Set a modern browser user-agent to help bypass bot detection on Render
-    args.push('--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-
-    // Force IPv4 and try multiple clients to bypass bot detection
-    args.push('--force-ipv4');
-    args.push('--extractor-args', 'youtube:player-client=web,android');
-
-    // Pass proxy if configured
-    const proxy = process.env.YT_PROXY;
-    if (proxy) {
-      args.push('--proxy', proxy);
-    }
+    const args = buildYtDlpArgs(baseArgs);
     
     const output = await runYtDlp(args);
     const lines = output.trim().split('\n');
@@ -192,39 +181,14 @@ export async function searchYouTube(query: string, limit: number = 5): Promise<Y
  */
 export async function ytDlpGetMetadata(url: string): Promise<YouTubeSearchResult[]> {
   try {
-    const args = [
+    const baseArgs = [
       url,
       '--flat-playlist',
       '--dump-json',
       '--js-runtimes', 'node'
     ];
 
-    if (config.hasCookies) {
-      args.push('--cookies', config.absoluteCookiePath);
-    }
-
-    // Pass PO Token if configured
-    const poToken = process.env.YT_PO_TOKEN || DEFAULT_PO_TOKEN;
-    const visitorData = process.env.YT_VISITOR_DATA || DEFAULT_VISITOR_DATA;
-    if (poToken) {
-      args.push('--extractor-args', `youtube:po_token=web+${poToken}`);
-      if (visitorData) {
-        args.push('--extractor-args', `youtube:visitor_data=${visitorData}`);
-      }
-    }
-
-    // Set a modern browser user-agent
-    args.push('--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-
-    // Force IPv4 and try multiple clients
-    args.push('--force-ipv4');
-    args.push('--extractor-args', 'youtube:player-client=web,android');
-
-    // Pass proxy if configured
-    const proxy = process.env.YT_PROXY;
-    if (proxy) {
-      args.push('--proxy', proxy);
-    }
+    const args = buildYtDlpArgs(baseArgs);
     
     const output = await runYtDlp(args);
     const lines = output.trim().split('\n');
@@ -270,7 +234,7 @@ export async function ytDlpGetMetadata(url: string): Promise<YouTubeSearchResult
  */
 export async function spawnYtDlpStream(url: string): Promise<Readable> {
   const binaryPath = await ensureYtDlp();
-  const args = [
+  const baseArgs = [
     '-f', 'bestaudio',
     '--no-playlist',
     '--buffer-size', '16K',
@@ -279,32 +243,7 @@ export async function spawnYtDlpStream(url: string): Promise<Readable> {
     url
   ];
 
-  if (config.hasCookies) {
-    args.push('--cookies', config.absoluteCookiePath);
-  }
-
-  // Pass PO Token if configured
-  const poToken = process.env.YT_PO_TOKEN || DEFAULT_PO_TOKEN;
-  const visitorData = process.env.YT_VISITOR_DATA || DEFAULT_VISITOR_DATA;
-  if (poToken) {
-    args.push('--extractor-args', `youtube:po_token=web+${poToken}`);
-    if (visitorData) {
-      args.push('--extractor-args', `youtube:visitor_data=${visitorData}`);
-    }
-  }
-
-  // Set a modern browser user-agent
-  args.push('--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-
-  // Force IPv4 and try multiple clients
-  args.push('--force-ipv4');
-  args.push('--extractor-args', 'youtube:player-client=web,android');
-
-  // Pass proxy if configured
-  const proxy = process.env.YT_PROXY;
-  if (proxy) {
-    args.push('--proxy', proxy);
-  }
+  const args = buildYtDlpArgs(baseArgs);
 
   logger.info(`Spawning yt-dlp audio stream: "${url}"`);
   const child = spawn(binaryPath, args, {
