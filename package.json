@@ -27,6 +27,7 @@
     "play-dl": "^1.9.7",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
+    "soundcloud-scraper": "^5.0.3",
     "vite": "^6.2.3",
     "youtube-sr": "^4.3.12"
   },

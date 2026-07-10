@@ -6,6 +6,37 @@ import path from 'path';
 import { Readable } from 'stream';
 import play from 'play-dl';
 import { YouTube } from 'youtube-sr';
+import ytdl from '@distube/ytdl-core';
+import { parseCookies } from './playdl-init.js';
+
+let ytdlAgent: ytdl.Agent | null = null;
+
+export function getYtdlAgent(): ytdl.Agent {
+  if (ytdlAgent) return ytdlAgent;
+  
+  const agentOptions: any = {};
+  if (process.env.YT_PO_TOKEN) agentOptions.poToken = process.env.YT_PO_TOKEN;
+  if (process.env.YT_VISITOR_DATA) agentOptions.visitorData = process.env.YT_VISITOR_DATA;
+  
+  if (config.hasCookies) {
+    try {
+      const cookiePath = config.absoluteCookiePath;
+      const cookieData = fs.readFileSync(cookiePath, 'utf8');
+      const cookies = parseCookies(cookieData);
+      if (cookies.length > 0) {
+        ytdlAgent = ytdl.createAgent(cookies, agentOptions);
+        logger.success('Created ytdl-core agent with cookies and PO Token');
+        return ytdlAgent;
+      }
+    } catch (e) {
+      logger.warn('Failed to parse cookies for ytdl-core:', e);
+    }
+  }
+  
+  // Create default agent if no cookies
+  ytdlAgent = ytdl.createAgent(undefined, agentOptions);
+  return ytdlAgent;
+}
 
 export interface YouTubeSearchResult {
   id: string;
@@ -194,16 +225,32 @@ export async function searchYouTube(query: string, limit: number = 5, platform: 
 
   // 2. Try play-dl as fallback
   try {
-    const playResults = await play.search(query, { limit, source: { youtube: 'video' } });
+    let sourceOpt: any = { youtube: 'video' };
+    if (platform === 'soundcloud') {
+      sourceOpt = { soundcloud: 'tracks' };
+    } else if (platform === 'spotify') {
+      sourceOpt = { spotify: 'track' };
+    }
+    
+    const playResults = await play.search(query, { limit, source: sourceOpt });
     if (playResults && playResults.length > 0) {
-      return playResults.map(v => ({
-        id: v.id || '',
-        title: v.title || 'Unknown Title',
-        url: v.url,
-        thumbnail: v.thumbnails[0]?.url || '',
-        duration: v.durationInSec,
-        durationString: v.durationRaw || formatDuration(v.durationInSec)
-      }));
+      return playResults.map(v => {
+        let durationInSec = 0;
+        let durationRaw = '';
+        if ('durationInSec' in v) {
+          durationInSec = (v as any).durationInSec;
+          durationRaw = (v as any).durationRaw || formatDuration(durationInSec);
+        }
+        
+        return {
+          id: String(v.id || ''),
+          title: v.title || 'Unknown Title',
+          url: v.url,
+          thumbnail: (v as any).thumbnails?.[0]?.url || (v as any).thumbnail?.url || '',
+          duration: durationInSec,
+          durationString: durationRaw
+        };
+      });
     }
   } catch (err: any) {
     logger.warn(`play-dl search failed, trying youtube-sr fallback: ${err.message || err}`);
@@ -269,35 +316,40 @@ export async function ytDlpGetMetadata(url: string): Promise<YouTubeSearchResult
   }
 
   // Fallback to play-dl
-  if (url.includes('youtube.com') || url.includes('youtu.be')) {
-    try {
-      const type = await play.validate(url);
-      if (type === 'yt_video') {
-        const videoInfo = await play.video_basic_info(url);
-        const v = videoInfo.video_details;
-        return [{
-          id: v.id || '',
-          title: v.title || 'Unknown Title',
-          url: v.url,
-          thumbnail: v.thumbnails[0]?.url || '',
-          duration: v.durationInSec,
-          durationString: v.durationRaw || formatDuration(v.durationInSec)
-        }];
-      } else if (type === 'yt_playlist') {
-        const playlistInfo = await play.playlist_info(url, { incomplete: true });
-        const videos = await playlistInfo.all_videos();
-        return videos.map(v => ({
-          id: v.id || '',
-          title: v.title || 'Unknown Title',
-          url: v.url,
-          thumbnail: v.thumbnails[0]?.url || '',
-          duration: v.durationInSec,
-          durationString: v.durationRaw || formatDuration(v.durationInSec)
-        }));
-      }
-    } catch (err: any) {
-      logger.warn(`play-dl metadata fetch failed, falling back to yt-dlp: ${err.message || err}`);
+  try {
+    const type = await play.validate(url);
+    if (type === 'yt_video' || type === 'so_track' || type === 'sp_track') {
+      let info: any;
+      if (type === 'yt_video') info = (await play.video_basic_info(url)).video_details;
+      else if (type === 'so_track') info = await play.soundcloud(url);
+      else if (type === 'sp_track') info = await play.spotify(url);
+      
+      const v = info;
+      return [{
+        id: String(v.id || ''),
+        title: v.name || v.title || 'Unknown Title',
+        url: v.url,
+        thumbnail: v.thumbnails?.[0]?.url || v.thumbnail?.url || '',
+        duration: v.durationInSec || 0,
+        durationString: v.durationRaw || formatDuration(v.durationInSec || 0)
+      }];
+    } else if (type === 'yt_playlist' || type === 'so_playlist' || type === 'sp_playlist' || type === 'sp_album') {
+      let items: any[] = [];
+      if (type === 'yt_playlist') items = await (await play.playlist_info(url, { incomplete: true })).all_videos();
+      else if (type === 'so_playlist') items = await (await play.soundcloud(url) as any).all_tracks();
+      else items = await (await play.spotify(url) as any).all_tracks();
+      
+      return items.map(v => ({
+        id: String(v.id || ''),
+        title: v.name || v.title || 'Unknown Title',
+        url: v.url,
+        thumbnail: v.thumbnails?.[0]?.url || v.thumbnail?.url || '',
+        duration: v.durationInSec || 0,
+        durationString: v.durationRaw || formatDuration(v.durationInSec || 0)
+      }));
     }
+  } catch (err: any) {
+    logger.warn(`play-dl metadata fetch failed: ${err.message || err}`);
   }
 
   // Final error if all methods failed
@@ -355,18 +407,28 @@ export async function spawnYtDlpStream(url: string): Promise<Readable> {
 export async function spawnStream(url: string): Promise<Readable> {
   if (url.includes('youtube.com') || url.includes('youtu.be')) {
     try {
-      logger.info(`Attempting play-dl stream for YouTube URL: ${url}`);
+      logger.info(`Attempting to stream via @distube/ytdl-core for YouTube URL: ${url}`);
+      const agent = getYtdlAgent();
       
-      const streamOptions: any = {
-        quality: 2,
-        discordPlayerCompatibility: true
-      };
+      const stream = ytdl(url, {
+        filter: 'audioonly',
+        quality: 'highestaudio',
+        highWaterMark: 1 << 25, // 32MB
+        agent
+      });
       
-      const stream = await play.stream(url, streamOptions);
-      logger.info(`Successfully started play-dl stream for: ${url}`);
+      logger.info(`Successfully started @distube/ytdl-core stream for: ${url}`);
+      return stream;
+    } catch (err: any) {
+      logger.warn(`@distube/ytdl-core stream failed, falling back to yt-dlp: ${err.message || err}`);
+    }
+  } else if (url.includes('soundcloud.com') || url.includes('spotify.com')) {
+    try {
+      logger.info(`Attempting play-dl stream for non-YouTube URL: ${url}`);
+      const stream = await play.stream(url, { discordPlayerCompatibility: true });
       return stream.stream;
     } catch (err: any) {
-      logger.warn(`play-dl stream failed, falling back to yt-dlp: ${err.message || err}`);
+      logger.warn(`play-dl stream failed for ${url}, falling back to yt-dlp: ${err.message || err}`);
     }
   }
 

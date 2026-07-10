@@ -13,7 +13,7 @@ import play from 'play-dl';
 import { Track } from './Track.js';
 import { QueueState } from '../types.js';
 import { logger } from '../utils/logger.js';
-import { YouTubeSearch } from '../utils/youtube-search.js';
+import { YouTubeSearch, searchYouTube } from '../utils/youtube-search.js';
 
 export class GuildQueue {
   public readonly guildId: string;
@@ -237,21 +237,16 @@ export class GuildQueue {
       // play-dl search for related content
       let searchResult: any[] = [];
       try {
-        searchResult = await play.search(lastTrack.title, { limit: 5 });
+        const results = await searchYouTube(lastTrack.title, 5, 'youtube');
+        searchResult = results.map(v => ({
+          title: v.title,
+          url: v.url,
+          thumbnails: v.thumbnail ? [{ url: v.thumbnail }] : [],
+          durationInSec: v.duration,
+          durationRaw: v.durationString
+        }));
       } catch (err) {
-        logger.warn(`play-dl search failed in autoplay, falling back to YouTubeSearch...`, err);
-        try {
-          const ytSrResults = await YouTubeSearch.search(lastTrack.title, { limit: 5 });
-          searchResult = ytSrResults.map(v => ({
-            title: v.title,
-            url: v.url,
-            thumbnails: v.thumbnail ? [{ url: v.thumbnail.url }] : [],
-            durationInSec: Math.floor(v.duration / 1000),
-            durationRaw: v.durationFormatted
-          }));
-        } catch (subErr: any) {
-          logger.error(`YouTubeSearch search also failed in autoplay:`, subErr.message || subErr);
-        }
+        logger.warn(`searchYouTube failed in autoplay...`, err);
       }
       
       const related = searchResult.filter(v => v.url !== lastTrack.url && (v.durationInSec || 0) > 30);

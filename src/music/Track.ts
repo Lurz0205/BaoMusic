@@ -39,7 +39,7 @@ export class Track implements TrackData {
         logger.info(`Searching YouTube equivalent for Spotify track: "${this.title}"...`);
         let youtubeUrl: string | null = null;
         try {
-          const searchResults = await YouTubeSearch.search(this.title, { limit: 1 });
+          const searchResults = await searchYouTube(this.title, 1, 'youtube');
           if (searchResults && searchResults.length > 0) {
             youtubeUrl = searchResults[0].url;
             logger.info(`Found YouTube equivalent for Spotify: "${searchResults[0].title}" (${youtubeUrl})`);
@@ -141,14 +141,14 @@ export class Track implements TrackData {
             
             // Search YouTube with the extracted title
             logger.info(`Searching YouTube for Spotify track: "${title}"`);
-            const results = await YouTubeSearch.search(title, { limit: 1 });
+            const results = await searchYouTube(title, 1, 'youtube');
             
             return results.map(item => new Track({
               title: item.title,
               url: item.url,
-              thumbnail: item.thumbnail.url,
-              duration: item.duration / 1000,
-              durationString: item.durationFormatted,
+              thumbnail: item.thumbnail,
+              duration: item.duration,
+              durationString: item.durationString,
               requestedBy,
               source: 'spotify'
             }));

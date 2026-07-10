@@ -111,12 +111,25 @@ export async function initPlayDL() {
         });
         logger.success('Play-DL initialized successfully with custom youtube cookies.');
       } else {
-        logger.warn('Cookie file is empty or could not be parsed. Play-DL starting without cookies.');
+        logger.warn('Cookie file is empty or could not be parsed. Play-DL starting without youtube cookies.');
       }
     } else {
-      logger.info('No cookie file found. Play-DL will operate without cookies.');
+      logger.info('No cookie file found. Play-DL will operate without youtube cookies.');
+    }
+    
+    // Initialize SoundCloud free client ID
+    try {
+      const clientId = await play.getFreeClientID();
+      await play.setToken({
+        soundcloud: {
+          client_id: clientId
+        }
+      });
+      logger.success('Play-DL initialized successfully with SoundCloud free client ID.');
+    } catch (scErr) {
+      logger.warn('Failed to get SoundCloud free client ID:', scErr);
     }
   } catch (err: any) {
-    logger.error('Failed to initialize Play-DL with custom cookies:', err);
+    logger.error('Failed to initialize Play-DL:', err);
   }
 }
