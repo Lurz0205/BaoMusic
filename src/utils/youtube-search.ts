@@ -127,9 +127,19 @@ export async function searchYouTube(query: string, limit: number = 5): Promise<Y
     const poToken = process.env.YT_PO_TOKEN || DEFAULT_PO_TOKEN;
     const visitorData = process.env.YT_VISITOR_DATA || DEFAULT_VISITOR_DATA;
     if (poToken) {
-      const val = visitorData ? `${visitorData}+${poToken}` : poToken;
-      args.push('--extractor-args', `youtube:po_token=${val}`);
+      // Use the format suggested by yt-dlp warnings: CLIENT.CONTEXT+PO_TOKEN
+      args.push('--extractor-args', `youtube:po_token=web+${poToken}`);
+      if (visitorData) {
+        args.push('--extractor-args', `youtube:visitor_data=${visitorData}`);
+      }
     }
+
+    // Set a modern browser user-agent to help bypass bot detection on Render
+    args.push('--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
+    // Force IPv4 and try multiple clients to bypass bot detection
+    args.push('--force-ipv4');
+    args.push('--extractor-args', 'youtube:player-client=web,android');
 
     // Pass proxy if configured
     const proxy = process.env.YT_PROXY;
@@ -197,9 +207,18 @@ export async function ytDlpGetMetadata(url: string): Promise<YouTubeSearchResult
     const poToken = process.env.YT_PO_TOKEN || DEFAULT_PO_TOKEN;
     const visitorData = process.env.YT_VISITOR_DATA || DEFAULT_VISITOR_DATA;
     if (poToken) {
-      const val = visitorData ? `${visitorData}+${poToken}` : poToken;
-      args.push('--extractor-args', `youtube:po_token=${val}`);
+      args.push('--extractor-args', `youtube:po_token=web+${poToken}`);
+      if (visitorData) {
+        args.push('--extractor-args', `youtube:visitor_data=${visitorData}`);
+      }
     }
+
+    // Set a modern browser user-agent
+    args.push('--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
+    // Force IPv4 and try multiple clients
+    args.push('--force-ipv4');
+    args.push('--extractor-args', 'youtube:player-client=web,android');
 
     // Pass proxy if configured
     const proxy = process.env.YT_PROXY;
@@ -268,9 +287,18 @@ export async function spawnYtDlpStream(url: string): Promise<Readable> {
   const poToken = process.env.YT_PO_TOKEN || DEFAULT_PO_TOKEN;
   const visitorData = process.env.YT_VISITOR_DATA || DEFAULT_VISITOR_DATA;
   if (poToken) {
-    const val = visitorData ? `${visitorData}+${poToken}` : poToken;
-    args.push('--extractor-args', `youtube:po_token=${val}`);
+    args.push('--extractor-args', `youtube:po_token=web+${poToken}`);
+    if (visitorData) {
+      args.push('--extractor-args', `youtube:visitor_data=${visitorData}`);
+    }
   }
+
+  // Set a modern browser user-agent
+  args.push('--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
+  // Force IPv4 and try multiple clients
+  args.push('--force-ipv4');
+  args.push('--extractor-args', 'youtube:player-client=web,android');
 
   // Pass proxy if configured
   const proxy = process.env.YT_PROXY;

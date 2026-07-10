@@ -35,26 +35,37 @@ export const playCommand = {
     }
 
     try {
-      // Prioritize YouTubeSearch (yt-dlp) as it uses PO Token and is more reliable on Render
+      // Use play-dl primarily for autocomplete as it is much faster
+      // Add a 2.5s timeout as Discord requires response within 3s
       let results: any[] = [];
       try {
-        const ytSrResults = await YouTubeSearch.search(focusedValue, { limit: 6 });
-        results = ytSrResults.map(v => ({
+        const playSearchPromise = play.search(focusedValue, { limit: 10 });
+        const timeoutPromise = new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Autocomplete timeout')), 2500)
+        );
+
+        const playResults = await Promise.race([playSearchPromise, timeoutPromise]);
+        results = playResults.map((v: any) => ({
           title: v.title,
           url: v.url,
-          durationRaw: v.durationFormatted
+          durationRaw: v.durationRaw
         }));
       } catch (err: any) {
-        // Fallback to play.search
+        logger.warn('Autocomplete via play-dl failed or timed out, falling back to yt-dlp search:', err.message || err);
+        // Fallback to yt-dlp search if play-dl fails or times out
         try {
-          const playResults = await play.search(focusedValue, { limit: 6 });
-          results = playResults;
+          const ytSrResults = await YouTubeSearch.search(focusedValue, { limit: 6 });
+          results = ytSrResults.map(v => ({
+            title: v.title,
+            url: v.url,
+            durationRaw: v.durationFormatted
+          }));
         } catch (subErr: any) {
           logger.error('Autocomplete search fallback failed:', subErr.message || subErr);
         }
       }
       
-      const choices = results.map((video) => {
+      const choices = results.slice(0, 25).map((video) => {
         const title = video.title || 'Unknown Title';
         const formattedTitle = title.length > 95 ? title.slice(0, 92) + '...' : title;
         return {
@@ -65,7 +76,7 @@ export const playCommand = {
 
       await interaction.respond(choices);
     } catch (err) {
-      // Fail silently to avoid clogging console logs during keystroke storms
+      // Fail silently
     }
   },
 
