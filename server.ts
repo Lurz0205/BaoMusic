@@ -8,6 +8,7 @@ import { startBot, stopBot, getBotStatus } from './src/music/bot-client.js';
 import { playerManager } from './src/music/PlayerManager.js';
 import { logger } from './src/utils/logger.js';
 import { initPlayDL } from './src/utils/playdl-init.js';
+import { ensureYtDlp } from './src/utils/youtube-search.js';
 
 // Load environment files
 dotenv.config();
@@ -184,11 +185,14 @@ PORT=${config.port}
   app.listen(PORT, '0.0.0.0', () => {
     logger.success(`Server running on http://localhost:${PORT}`);
     // Start Discord Bot silently in background
-    try {
-      startBot();
-    } catch (err) {
-      logger.error('Failed to start bot', err);
-    }
+    (async () => {
+      try {
+        await ensureYtDlp();
+        startBot();
+      } catch (err) {
+        logger.error('Failed to start bot', err);
+      }
+    })();
   });
 }
 

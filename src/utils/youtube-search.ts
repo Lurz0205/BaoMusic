@@ -19,7 +19,7 @@ export interface YouTubeSearchResult {
 const ROOT_DIR = process.cwd();
 const YTDLP_PATH = path.join(ROOT_DIR, 'bin', 'yt-dlp');
 
-async function ensureYtDlp(): Promise<string> {
+export async function ensureYtDlp(): Promise<string> {
   const binDir = path.join(ROOT_DIR, 'bin');
   if (!fs.existsSync(binDir)) {
     fs.mkdirSync(binDir, { recursive: true });
