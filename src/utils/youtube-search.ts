@@ -6,37 +6,6 @@ import path from 'path';
 import { Readable } from 'stream';
 import play from 'play-dl';
 import { YouTube } from 'youtube-sr';
-import ytdl from '@distube/ytdl-core';
-import { parseCookies } from './playdl-init.js';
-
-let ytdlAgent: ytdl.Agent | null = null;
-
-export function getYtdlAgent(): ytdl.Agent {
-  if (ytdlAgent) return ytdlAgent;
-  
-  const agentOptions: any = {};
-  if (process.env.YT_PO_TOKEN) agentOptions.poToken = process.env.YT_PO_TOKEN;
-  if (process.env.YT_VISITOR_DATA) agentOptions.visitorData = process.env.YT_VISITOR_DATA;
-  
-  if (config.hasCookies) {
-    try {
-      const cookiePath = config.absoluteCookiePath;
-      const cookieData = fs.readFileSync(cookiePath, 'utf8');
-      const cookies = parseCookies(cookieData);
-      if (cookies.length > 0) {
-        ytdlAgent = ytdl.createAgent(cookies, agentOptions);
-        logger.success('Created ytdl-core agent with cookies and PO Token');
-        return ytdlAgent;
-      }
-    } catch (e) {
-      logger.warn('Failed to parse cookies for ytdl-core:', e);
-    }
-  }
-  
-  // Create default agent if no cookies
-  ytdlAgent = ytdl.createAgent(undefined, agentOptions);
-  return ytdlAgent;
-}
 
 export interface YouTubeSearchResult {
   id: string;
@@ -89,39 +58,45 @@ async function ensureYtDlp(): Promise<string> {
 function buildYtDlpArgs(baseArgs: string[]): string[] {
   const args = [...baseArgs];
 
-  if (config.hasCookies) {
-    const resolvedPath = config.absoluteCookiePath;
-    if (fs.existsSync(resolvedPath)) {
-      args.push('--cookies', resolvedPath);
-    }
-  }
-
   // Use a modern User-Agent
-  const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+  const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
   args.push('--user-agent', userAgent);
   args.push('--force-ipv4');
   args.push('--no-check-certificates');
   args.push('--geo-bypass');
   args.push('--referer', 'https://www.youtube.com/');
-  args.push('--add-header', 'Accept-Language:en-US,en;q=0.9');
   args.push('--no-cache-dir');
   
-  // Use specific extractor args for better compatibility
-  // Prioritize clients that are less likely to be blocked
-  const extractorArgs = [
-    'youtube:player-client=ios,android,tvhtml5,mweb',
-    'youtube:player_skip=configs,webpage'
-  ];
+  let extractorArgsStr = 'youtube:player_client=ios';
 
   const poToken = process.env.YT_PO_TOKEN;
   if (poToken) {
     const formattedPoToken = poToken.startsWith('web+') ? poToken : `web+${poToken}`;
-    extractorArgs.push(`po_token=${formattedPoToken}`);
+    extractorArgsStr = `youtube:po_token=${formattedPoToken};player_client=web`;
     const visitorData = process.env.YT_VISITOR_DATA;
-    if (visitorData) extractorArgs.push(`visitor_data=${visitorData}`);
+    if (visitorData) {
+       extractorArgsStr += `;visitor_data=${visitorData}`;
+    }
+  } else if (config.hasCookies) {
+    const resolvedPath = config.absoluteCookiePath;
+    if (fs.existsSync(resolvedPath)) {
+      args.push('--cookies', resolvedPath);
+      // Wait, if it has cookies, should we use web or ios? User snippet says:
+      // else if (config.ytdl.cookiesFile) { baseOptions.cookies = config.ytdl.cookiesFile; }
+      // does not set player_client explicitly in if blocks but let's keep it to default or web?
+      // Wait, snippet says:
+      // if (poToken) -> player_client=web
+      // else if (browserCookies) -> ...
+      // else if (cookiesFile) -> ...
+      // else -> player_client=ios
+      // So if cookiesFile exists without PO Token, they didn't set extractorArgs (so it uses default).
+      extractorArgsStr = ''; // Let yt-dlp decide if cookies are provided
+    }
   }
-
-  args.push('--extractor-args', extractorArgs.join(';'));
+  
+  if (extractorArgsStr) {
+    args.push('--extractor-args', extractorArgsStr);
+  }
   
   const proxy = process.env.YT_PROXY;
   if (proxy) args.push('--proxy', proxy);
@@ -405,24 +380,7 @@ export async function spawnYtDlpStream(url: string): Promise<Readable> {
  * falls back to yt-dlp if needed or for other sources.
  */
 export async function spawnStream(url: string): Promise<Readable> {
-  if (url.includes('youtube.com') || url.includes('youtu.be')) {
-    try {
-      logger.info(`Attempting to stream via @distube/ytdl-core for YouTube URL: ${url}`);
-      const agent = getYtdlAgent();
-      
-      const stream = ytdl(url, {
-        filter: 'audioonly',
-        quality: 'highestaudio',
-        highWaterMark: 1 << 25, // 32MB
-        agent
-      });
-      
-      logger.info(`Successfully started @distube/ytdl-core stream for: ${url}`);
-      return stream;
-    } catch (err: any) {
-      logger.warn(`@distube/ytdl-core stream failed, falling back to yt-dlp: ${err.message || err}`);
-    }
-  } else if (url.includes('soundcloud.com') || url.includes('spotify.com')) {
+  if (url.includes('soundcloud.com') || url.includes('spotify.com')) {
     try {
       logger.info(`Attempting play-dl stream for non-YouTube URL: ${url}`);
       const stream = await play.stream(url, { discordPlayerCompatibility: true });
@@ -432,6 +390,7 @@ export async function spawnStream(url: string): Promise<Readable> {
     }
   }
 
+  // Use yt-dlp for all YouTube streams or as fallback for others
   return spawnYtDlpStream(url);
 }
 
