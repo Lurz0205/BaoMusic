@@ -4,7 +4,7 @@ import fs from 'fs';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 import { config } from './src/config/index.js';
-import { startBot, stopBot, getBotStatus } from './src/music/bot-client.js';
+import { startBot, stopBot, getBotStatus, getBotClient } from './src/music/bot-client.js';
 import { playerManager } from './src/music/PlayerManager.js';
 import { logger } from './src/utils/logger.js';
 import { initPlayDL } from './src/utils/playdl-init.js';
