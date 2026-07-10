@@ -77,35 +77,64 @@ export function registerInteractionCreateEvent(client: Client) {
 
         logger.info(`Executing command: /${interaction.commandName} by ${interaction.user.tag} in "${interaction.guild?.name || 'DM'}"`);
 
-        // Monkey-patch response methods to be state-aware
+        // Monkey-patch response methods to be state-aware and robust
         const originalReply = interaction.reply.bind(interaction);
         const originalEditReply = interaction.editReply.bind(interaction);
 
         const wrappedInteraction = interaction as any;
+        
+        // Track response state manually to avoid race conditions with Discord.js internal state
+        let hasResponded = interaction.replied || interaction.deferred;
 
         wrappedInteraction.reply = async (options: any) => {
-          try {
-            if (interaction.replied || interaction.deferred) {
+          if (hasResponded) {
+            try {
               return await originalEditReply(options);
+            } catch (err: any) {
+              if (err.code === 10062 || err.code === 40060) return;
+              throw err;
             }
-            return await originalReply(options);
+          }
+          try {
+            const res = await originalReply(options);
+            hasResponded = true;
+            return res;
           } catch (err: any) {
-            if (err.code === 10062 || err.code === 40060) return;
+            if (err.code === 40060 || (err.message && err.message.includes('already been acknowledged'))) {
+              hasResponded = true;
+              try { return await originalEditReply(options); } catch { return; }
+            }
+            if (err.code === 10062) return;
             throw err;
           }
         };
 
         wrappedInteraction.editReply = async (options: any) => {
-          try {
-            if (!interaction.replied && !interaction.deferred) {
-              return await originalReply(options);
+          if (!hasResponded) {
+            try {
+              const res = await originalReply(options);
+              hasResponded = true;
+              return res;
+            } catch (err: any) {
+              if (err.code === 40060 || (err.message && err.message.includes('already been acknowledged'))) {
+                hasResponded = true;
+                try { return await originalEditReply(options); } catch { return; }
+              }
+              if (err.code === 10062) return;
+              throw err;
             }
+          }
+          try {
             return await originalEditReply(options);
           } catch (err: any) {
             if (err.code === 10062) return;
             // Handle InteractionNotReplied specifically
             if (err.code === 'InteractionNotReplied' || (err.message && err.message.includes('not been sent or deferred'))) {
-              try { return await originalReply(options); } catch { return; }
+              try { 
+                const res = await originalReply(options); 
+                hasResponded = true;
+                return res;
+              } catch { return; }
             }
             throw err;
           }

@@ -132,12 +132,12 @@ export async function initPlayDL() {
 
     // Initialize Spotify guest token
     try {
-      if (play.is_expired()) {
-        await play.refreshToken();
-        logger.success('Play-DL initialized successfully with Spotify guest token.');
-      }
-    } catch (spErr) {
-      logger.warn('Failed to initialize Spotify guest token:', spErr);
+      // play-dl manages its internal state, but sometimes it needs a manual trigger
+      // Check if spotify is configured or if we should just try to refresh
+      await play.refreshToken();
+      logger.success('Play-DL initialized successfully with Spotify guest token.');
+    } catch (spErr: any) {
+      logger.warn('Failed to initialize Spotify guest token (non-fatal):', spErr.message || spErr);
     }
   } catch (err: any) {
     logger.error('Failed to initialize Play-DL:', err);
