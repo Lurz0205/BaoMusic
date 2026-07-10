@@ -129,6 +129,16 @@ export async function initPlayDL() {
     } catch (scErr) {
       logger.warn('Failed to get SoundCloud free client ID:', scErr);
     }
+
+    // Initialize Spotify guest token
+    try {
+      if (play.is_expired()) {
+        await play.refreshToken();
+        logger.success('Play-DL initialized successfully with Spotify guest token.');
+      }
+    } catch (spErr) {
+      logger.warn('Failed to initialize Spotify guest token:', spErr);
+    }
   } catch (err: any) {
     logger.error('Failed to initialize Play-DL:', err);
   }

@@ -58,7 +58,11 @@ export class PlayerManager {
       connection,
       voiceChannelId,
       channelName,
-      textChannelId
+      textChannelId,
+      () => {
+        this.queues.delete(guildId);
+        logger.info(`Removed GuildQueue reference from PlayerManager for guild: ${guildId}`);
+      }
     );
 
     this.queues.set(guildId, queue);

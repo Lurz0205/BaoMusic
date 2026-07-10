@@ -32,10 +32,23 @@ export function registerInteractionCreateEvent(client: Client) {
           queue.setVolume(Math.max(queue.volume - 10, 0));
           await interaction.deferUpdate();
           break;
-        case 'control_loop':
-          // Need to add loop implementation in GuildQueue if not exists
-          await interaction.reply({ content: '🔁 Tính năng này đang được phát triển!', ephemeral: true });
+        case 'control_loop': {
+          const modes: ('off' | 'track' | 'queue')[] = ['off', 'track', 'queue'];
+          const currentIndex = modes.indexOf(queue.loopMode);
+          const nextIndex = (currentIndex + 1) % modes.length;
+          queue.loopMode = modes[nextIndex];
+          
+          let modeViet = '';
+          if (queue.loopMode === 'off') modeViet = 'Tắt lặp';
+          if (queue.loopMode === 'track') modeViet = 'Lặp 1 bài (Track)';
+          if (queue.loopMode === 'queue') modeViet = 'Lặp cả hàng chờ (Queue)';
+
+          await interaction.reply({
+            content: `🔄 Đã chuyển chế độ lặp sang: **${modeViet}**!`,
+            ephemeral: true
+          });
           break;
+        }
       }
       return;
     }

@@ -1,5 +1,6 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
 import { playerManager } from '../music/PlayerManager.js';
+import { logger } from '../utils/logger.js';
 
 export const skipCommand = {
   data: new SlashCommandBuilder()

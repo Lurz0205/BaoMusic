@@ -36,22 +36,27 @@ export class Track implements TrackData {
 
       // Handle Spotify tracks: search and get equivalent YouTube URL
       if (this.source === 'spotify') {
-        logger.info(`Searching YouTube equivalent for Spotify track: "${this.title}"...`);
-        let youtubeUrl: string | null = null;
-        try {
-          const searchResults = await searchYouTube(this.title, 1, 'youtube');
-          if (searchResults && searchResults.length > 0) {
-            youtubeUrl = searchResults[0].url;
-            logger.info(`Found YouTube equivalent for Spotify: "${searchResults[0].title}" (${youtubeUrl})`);
-          }
-        } catch (err: any) {
-          logger.error(`YouTube search failed for Spotify conversion:`, err.message || err);
-        }
-
-        if (youtubeUrl) {
-          finalUrl = youtubeUrl;
+        const isAlreadyYoutube = this.url.includes('youtube.com') || this.url.includes('youtu.be');
+        if (isAlreadyYoutube) {
+          finalUrl = this.url;
         } else {
-          throw new Error(`Could not find a YouTube equivalent for Spotify track: "${this.title}"`);
+          logger.info(`Searching YouTube equivalent for Spotify track: "${this.title}"...`);
+          let youtubeUrl: string | null = null;
+          try {
+            const searchResults = await searchYouTube(this.title, 1, 'youtube');
+            if (searchResults && searchResults.length > 0) {
+              youtubeUrl = searchResults[0].url;
+              logger.info(`Found YouTube equivalent for Spotify: "${searchResults[0].title}" (${youtubeUrl})`);
+            }
+          } catch (err: any) {
+            logger.error(`YouTube search failed for Spotify conversion:`, err.message || err);
+          }
+
+          if (youtubeUrl) {
+            finalUrl = youtubeUrl;
+          } else {
+            throw new Error(`Could not find a YouTube equivalent for Spotify track: "${this.title}"`);
+          }
         }
       }
 
@@ -104,6 +109,10 @@ export class Track implements TrackData {
     // 1. Check if the input is a Spotify link
     if (cleanInput.includes('spotify.com')) {
       try {
+        if (play.is_expired()) {
+          logger.info('Spotify token is expired or not loaded. Refreshing Spotify token...');
+          await play.refreshToken();
+        }
         const spotifyData = await play.spotify(cleanInput);
         if (spotifyData.type === 'playlist' || spotifyData.type === 'album') {
           const tracks = await (spotifyData as any).all_tracks();

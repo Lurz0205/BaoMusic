@@ -1,4 +1,10 @@
-import { Message } from 'discord.js';
+import { 
+  Message, 
+  EmbedBuilder, 
+  ActionRowBuilder, 
+  ButtonBuilder, 
+  ButtonStyle 
+} from 'discord.js';
 import {
   AudioPlayer,
   AudioPlayerStatus,
@@ -15,6 +21,7 @@ import { Track } from './Track.js';
 import { QueueState } from '../types.js';
 import { logger } from '../utils/logger.js';
 import { YouTubeSearch, searchYouTube } from '../utils/youtube-search.js';
+import { getBotClient } from './bot-client.js';
 
 export class GuildQueue {
   public readonly guildId: string;
@@ -41,13 +48,17 @@ export class GuildQueue {
   private nowPlayingMessage: Message | null = null;
   public playbackDuration = 0;
   
+  private isTransitioningPrevious = false;
+  private readonly onDestroy?: () => void;
+  
   constructor(
     guildId: string,
     guildName: string,
     connection: VoiceConnection,
     voiceChannelId: string,
     channelName: string,
-    textChannelId?: string
+    textChannelId?: string,
+    onDestroy?: () => void
   ) {
     this.guildId = guildId;
     this.guildName = guildName;
@@ -55,6 +66,7 @@ export class GuildQueue {
     this.voiceChannelId = voiceChannelId;
     this.channelName = channelName;
     this.textChannelId = textChannelId;
+    this.onDestroy = onDestroy;
 
     this.player = createAudioPlayer();
     this.connection.subscribe(this.player);
@@ -173,6 +185,54 @@ export class GuildQueue {
       
       this.player.play(resource);
       logger.success(`Now playing "${this.currentTrack.title}" in "${this.guildName}"`);
+
+      // Delete the old "now playing" message first
+      await this.setNowPlayingMessage(null);
+
+      // Post the new "Now Playing" embed with control buttons
+      try {
+        const client = getBotClient();
+        if (client && this.textChannelId) {
+          const channel = client.channels.cache.get(this.textChannelId) || await client.channels.fetch(this.textChannelId).catch(() => null);
+          if (channel && channel.isTextBased()) {
+            const track = this.currentTrack;
+            const color = track.source === 'spotify' ? 0x1DB954 : (track.source === 'soundcloud' ? 0xFF5500 : 0xFF0000);
+
+            const embed = new EmbedBuilder()
+              .setColor(color)
+              .setAuthor({ 
+                name: '🎶 Đang phát ngay bây giờ', 
+                iconURL: track.requestedBy.avatarUrl 
+              })
+              .setTitle(track.title)
+              .setURL(track.url)
+              .setDescription(`⏱️ \`${track.durationString}\``)
+              .addFields(
+                { name: 'Yêu cầu bởi', value: `👤 ${track.requestedBy.username}`, inline: true },
+                { name: 'Nguồn', value: `🔌 ${track.source.toUpperCase()}`, inline: true }
+              );
+
+            if (track.thumbnail) {
+              embed.setThumbnail(track.thumbnail);
+            }
+
+            const row = new ActionRowBuilder<ButtonBuilder>()
+              .addComponents(
+                new ButtonBuilder().setCustomId('control_previous').setLabel('⏮️').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('control_pause_resume').setLabel('⏸️/▶️').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('control_skip').setLabel('⏭️').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('control_loop').setLabel('🔁').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('control_volume_down').setLabel('🔉').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('control_volume_up').setLabel('🔊').setStyle(ButtonStyle.Secondary)
+              );
+
+            const msg = await (channel as any).send({ embeds: [embed], components: [row] });
+            this.nowPlayingMessage = msg;
+          }
+        }
+      } catch (msgErr) {
+        logger.error('Failed to send Now Playing embed to channel:', msgErr);
+      }
     } catch (err: any) {
       logger.error(`Error initiating playback in "${this.guildName}":`, err);
       // If playing fails, shift and play next
@@ -189,6 +249,12 @@ export class GuildQueue {
     
     // Clear the now playing message
     await this.setNowPlayingMessage(null);
+
+    if (this.isTransitioningPrevious) {
+      this.isTransitioningPrevious = false;
+      this.play();
+      return;
+    }
 
     // Save to previous tracks
     this.previousTracks.push(this.currentTrack);
@@ -361,6 +427,8 @@ export class GuildQueue {
 
     logger.music(`Re-playing previous track: "${lastTrack.title}"`, 'previous');
     
+    this.isTransitioningPrevious = true;
+    
     // Put current track (if playing) back into queue at the second position
     if (this.currentTrack) {
       this.tracks.unshift(lastTrack, this.currentTrack);
@@ -523,6 +591,10 @@ export class GuildQueue {
         this.connection.destroy();
       }
     } catch {}
+
+    if (this.onDestroy) {
+      this.onDestroy();
+    }
   }
 
   /**

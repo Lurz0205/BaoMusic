@@ -46,18 +46,22 @@ export const playCommand = {
   async autocomplete(interaction: AutocompleteInteraction) {
     const focusedValue = interaction.options.getFocused();
     if (!focusedValue || focusedValue.trim().length === 0) {
-      return interaction.respond([]);
+      try {
+        if (!interaction.responded) {
+          await interaction.respond([]);
+        }
+      } catch (e) {}
+      return;
     }
 
     try {
       // 1. YouTube-SR suggestions (fastest)
       // Use youtube-sr suggestions for autocomplete as it is extremely robust and fast
-      // Wrapped in Promise.race with a 2-second timeout so it never exceeds Discord's 3-second limit.
-      const timeoutPromise = new Promise<string[]>((resolve) => setTimeout(() => resolve([]), 2000));
+      // Wrapped in Promise.race with a 1.5-second timeout so it never exceeds Discord's 3-second limit.
+      const timeoutPromise = new Promise<string[]>((resolve) => setTimeout(() => resolve([]), 1500));
       const suggestionsPromise = YouTube.getSuggestions(focusedValue);
       const suggestions = await Promise.race([suggestionsPromise, timeoutPromise]);
 
-      
       const choices = suggestions.slice(0, 25).map((query) => {
         const title = typeof query === 'string' ? query : (query.title || 'Unknown');
         const formattedTitle = title.length > 95 ? title.slice(0, 92) + '...' : title;
@@ -67,12 +71,16 @@ export const playCommand = {
         };
       });
       
-      await interaction.respond(choices);
+      if (!interaction.responded) {
+        await interaction.respond(choices);
+      }
     } catch (err: any) {
       logger.warn('Autocomplete via youtube-sr suggestions failed:', err.message || err);
       // Fail silently for interaction
       try {
-        await interaction.respond([]);
+        if (!interaction.responded) {
+          await interaction.respond([]);
+        }
       } catch (e) {}
     }
   },
@@ -135,37 +143,24 @@ export const playCommand = {
       // Add songs to queue
       queue.addTracks(tracks);
 
-      const isNowPlaying = queue.currentTrack === tracks[0];
       const track = tracks[0];
       const color = track.source === 'spotify' ? 0x1DB954 : (track.source === 'soundcloud' ? 0xFF5500 : 0xFF0000);
 
       const embed = new EmbedBuilder()
         .setColor(color)
-        .setAuthor({ name: tracks.length > 1 ? '📚 Đã thêm Playlist vào hàng đợi' : (isNowPlaying ? '🎶 Đang phát ngay bây giờ' : '📥 Đã thêm vào hàng chờ'), iconURL: requester.avatarUrl })
+        .setAuthor({ 
+          name: tracks.length > 1 ? '📚 Đã nạp thành công Playlist' : '📥 Đã thêm vào hàng chờ', 
+          iconURL: requester.avatarUrl 
+        })
         .setTitle(tracks.length > 1 ? `Đã nạp thành công ${tracks.length} bài hát` : track.title)
         .setURL(tracks.length > 1 ? null : track.url)
-        .setDescription(tracks.length > 1 ? `Kênh: ${voiceChannel.name}` : `⏱️ \`${track.durationString}\``)
-        .addFields(
-          { name: 'Yêu cầu bởi', value: `👤 ${interaction.user.username}`, inline: true },
-          { name: 'Nguồn', value: `🔌 ${track.source.toUpperCase()}`, inline: true }
-        );
+        .setDescription(tracks.length > 1 ? `Kênh: ${voiceChannel.name}` : `⏱️ \`${track.durationString}\``);
 
-      if (track.thumbnail) {
+      if (tracks.length === 1 && track.thumbnail) {
         embed.setThumbnail(track.thumbnail);
       }
 
-      const row = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(
-          new ButtonBuilder().setCustomId('control_previous').setLabel('⏮️').setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId('control_pause_resume').setLabel('⏸️/▶️').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId('control_skip').setLabel('⏭️').setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId('control_loop').setLabel('🔁').setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId('control_volume_down').setLabel('🔉').setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId('control_volume_up').setLabel('🔊').setStyle(ButtonStyle.Secondary)
-        );
-
-      const message = await interaction.editReply({ embeds: [embed], components: [row] });
-      await queue.setNowPlayingMessage(message as any);
+      await interaction.editReply({ embeds: [embed] });
 
     } catch (err: any) {
       logger.error('Error in /play command execution:', err);
