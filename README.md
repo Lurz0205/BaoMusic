@@ -1,20 +1,26 @@
-# 🎵 Discord Music Bot - Web Control Panel
+# 🎵 Discord Music Bot - Web Control Panel (Ultimate Edition)
 
-Một Discord Music Bot **production-ready**, được tối ưu hóa cực kỳ nhẹ RAM và CPU, khởi động cực nhanh và phát nhạc gần như ngay lập tức. Dự án được phát triển hoàn toàn bằng **discord.js v14**, **@discordjs/voice**, và **yt-dlp** (không sử dụng Lavalink hoặc các library cũ lỗi thời).
+Một Discord Music Bot **production-ready** mạnh mẽ, được tối ưu hóa cực kỳ nhẹ RAM và CPU, khởi động nhanh và phát nhạc chất lượng cao. Dự án được phát triển bằng **discord.js v14**, **@discordjs/voice**, và sử dụng lõi phát nhạc **yt-dlp** hiện đại nhất.
 
-Đặc biệt, dự án tích hợp một **Web Control Panel (Dashboard)** tuyệt đẹp bằng React + Express, cho phép bạn điều khiển trình phát từ xa, cấu hình bot token trực quan và tải lên file `cookies.txt` để bỏ qua lỗi chặn YouTube cực kỳ dễ dàng.
+Đặc biệt, dự án tích hợp một **Web Control Panel (Dashboard)** tuyệt đẹp bằng React + Express, cho phép bạn điều khiển trình phát từ xa, quản lý hàng đợi thời gian thực và cấu hình hệ thống chuyên sâu.
 
 ---
 
 ## ✨ Tính Năng Nổi Bật
 
-- **🎵 Đa Nền Tảng**: Hỗ trợ phát nhạc từ YouTube (Video/Playlist), Spotify (Bài hát/Album/Playlist), và SoundCloud (Bài hát/Playlist).
-- **🚀 Siêu Nhẹ & Tối Ưu**: Được tinh chỉnh chạy cực mượt và ổn định trên tài nguyên giới hạn của **Render Free Tier**.
-- **🌐 Web Control Panel**: Giao diện trực quan theo dõi trạng thái, độ trễ, số lượng guild, và danh sách các phòng đang phát nhạc kèm tính năng Remote Control trực tiếp.
-- **🔍 Autocomplete**: Tính năng tìm kiếm gợi ý bài hát tự động khi gõ `/play` siêu nhanh, mượt mà và chống spam request.
-- **📍 Treo Phòng 24/7**: Lệnh `/247` giữ bot luôn ở lại trong phòng thoại kể cả khi kết thúc nhạc hoặc khởi động lại.
-- **🍪 Vượt Chặn YouTube**: Hỗ trợ upload trực tiếp file `cookie.txt` thông qua giao diện Web để giải quyết vấn đề chặn phát nhạc của YouTube.
-- **⚡ Slash Commands**: Sử dụng 100% Slash Commands thế hệ mới (`/play`, `/skip`, `/stop`, `/pause`, `/resume`, `/queue`, `/nowplaying`, `/shuffle`, `/remove`, `/clear`, `/loop`, `/volume`, `/join`, `/leave`, `/247`, `/help`, `/ping`).
+- **🎵 Âm Thanh Chất Lượng Cao**: Sử dụng stream Opus 48kHz trực tiếp từ `yt-dlp` với các tham số tối ưu hóa cho chất lượng audio tốt nhất (`--audio-quality 0`).
+- **🚀 Siêu Nhẹ & Tối Ưu**: Được tinh chỉnh để chạy mượt mà trên các môi trường giới hạn tài nguyên như **Cloud Run**, **Render**, hoặc **Heroku**.
+- **🌐 Web Control Panel Toàn Diện**: 
+  - Theo dõi trạng thái bot, độ trễ, và số lượng server.
+  - Điều khiển nhạc thời gian thực: Play, Skip, Pause, Resume, Stop, Volume, Loop, 24/7.
+  - Thanh tiến trình nhạc (Progress Bar) mượt mà được đồng bộ hóa.
+- **🔍 Tìm Kiếm Thông Minh**: Hỗ trợ Autocomplete khi gõ lệnh `/play` trên Discord, giúp tìm kiếm bài hát cực nhanh.
+- **🎼 Đa Nền Tảng**: 
+  - **YouTube**: Hỗ trợ Video, Playlist, Shorts, và Livestream.
+  - **Spotify**: Hỗ trợ Link bài hát, Album, Playlist (Tự động chuyển đổi sang YouTube với metadata chính xác).
+  - **SoundCloud**: Hỗ trợ Link bài hát và Playlist.
+- **📍 Treo Phòng 24/7**: Giữ bot luôn ở lại trong phòng thoại kể cả khi không có người nghe hoặc khi bot khởi động lại.
+- **🍪 Quản Lý Cookies Chuyên Sâu**: Giao diện upload `cookies.txt` trực quan kèm hướng dẫn trích xuất cookies nâng cao để bypass mọi rào cản của YouTube.
 
 ---
 
@@ -22,137 +28,87 @@ Một Discord Music Bot **production-ready**, được tối ưu hóa cực kỳ
 
 | Lệnh | Mô Tả |
 | :--- | :--- |
-| `/play [tên/link]` | Phát nhạc từ YouTube, Spotify, SoundCloud hoặc tìm kiếm. Hỗ trợ tự động gợi ý kết quả! |
-| `/skip` | Bỏ qua bài hát hiện tại và phát bài tiếp theo. |
-| `/stop` | Dừng nhạc, xóa sạch hàng đợi và hủy trình phát nhạc. |
-| `/pause` | Tạm dừng phát nhạc. |
-| `/resume` | Tiếp tục phát nhạc bị tạm dừng. |
-| `/queue` | Xem danh sách bài hát đang chờ trong hàng đợi. |
-| `/nowplaying` | Xem chi tiết bài hát đang phát cùng tiến trình phát (`▬▬🔘▬▬`). |
-| `/shuffle` | Trộn ngẫu nhiên danh sách hàng chờ. |
-| `/remove [vị trí]` | Xóa một bài hát cụ thể khỏi danh sách chờ bằng số thứ tự. |
-| `/clear` | Xóa toàn bộ hàng đợi (giữ lại bài hát đang phát). |
-| `/loop [chế độ]` | Thiết lập chế độ lặp (Tắt, Lặp 1 Bài, Lặp Hàng Đợi). |
-| `/volume [0-100]` | Điều chỉnh âm lượng phát nhạc của bot. |
-| `/join` | Mời bot tham gia vào kênh thoại của bạn. |
-| `/leave` | Trục xuất bot ra khỏi kênh thoại. |
-| `/247 [bật/tắt]` | Kích hoạt hoặc hủy kích hoạt chế độ treo phòng thoại 24/7. |
-| `/ping` | Kiểm tra độ trễ kết nối (API latency & WebSocket ping). |
-| `/help` | Xem bảng hướng dẫn chi tiết các lệnh. |
+| `/play [tên/link]` | Phát nhạc từ mọi nguồn. Hỗ trợ tự động gợi ý kết quả khi gõ tên bài hát! |
+| `/skip` | Bỏ qua bài hát hiện tại. |
+| `/stop` | Dừng nhạc và xóa sạch hàng đợi. |
+| `/pause` / `/resume` | Tạm dừng hoặc tiếp tục phát nhạc. |
+| `/queue` | Xem danh sách các bài hát đang chờ. |
+| `/nowplaying` | Xem chi tiết bài hát đang phát kèm thanh tiến trình trực quan. |
+| `/volume [0-100]` | Điều chỉnh âm lượng (mặc định 100%). |
+| `/loop [chế độ]` | Chế độ lặp: Tắt, 1 Bài, Toàn bộ Hàng đợi. |
+| `/247 [bật/tắt]` | Giữ bot luôn trực tuyến trong kênh thoại. |
+| `/ping` | Kiểm tra tốc độ phản hồi của bot. |
 
 ---
 
-## 🚀 Hướng Dẫn Deploy Lên Render Free Tier
+## 🌐 Web Dashboard & Điều Khiển Từ Xa
 
-Để đưa dự án hoạt động ổn định và giữ bot online liên tục 24/7 trên Render, hãy làm theo các bước sau:
-
-### Bước 1: Chuẩn bị mã nguồn trên GitHub
-1. Tải toàn bộ mã nguồn này về máy của bạn dưới dạng file `.zip`.
-2. Tạo một repository mới trên tài khoản **GitHub** của bạn (chế độ **Private** hoặc **Public**).
-3. Đẩy toàn bộ mã nguồn lên repository vừa tạo.
-
-### Bước 2: Deploy lên Render.com
-1. Đăng nhập vào trang quản trị **[Render.com](https://render.com/)** (liên kết qua GitHub).
-2. Nhấn nút **New +** ở góc phải và chọn **Web Service**.
-3. Chọn repository chứa mã nguồn bot nhạc của bạn vừa đẩy lên GitHub.
-4. Thiết lập các thông số cơ bản sau:
-   - **Language (Runtime)**: `Node`
-   - **Region**: Chọn khu vực gần bạn nhất (ví dụ: `Singapore` hoặc `Oregon`).
-   - **Build Command**: `npm install && npm run build`
-   - **Start Command**: `npm start`
-   - **Plan**: Chọn `Free` ($0/month).
-
-### Bước 3: Cấu hình Biến Môi Trường (Environment Variables)
-Chuyển qua tab **Environment** tại trang quản trị Web Service vừa tạo trên Render, chọn **Add Environment Variable** và thêm các biến sau:
-- `BOT_TOKEN`: Mã Token của Discord Bot (Lấy từ Discord Developer Portal).
-- `CLIENT_ID`: Application ID của Discord Bot (Lấy từ Discord Developer Portal).
-- `NODE_ENV`: Đặt giá trị là `production`.
-- `PORT`: Đặt giá trị là `3000`.
-- `COOKIE_PATH`: Đặt giá trị là `cookies/cookie.txt` (Hệ thống sẽ tự động dùng cookie được tải lên từ giao diện web).
-
-Nhấn **Save Changes** để lưu cấu hình. Render sẽ tự động tiến hành build và khởi động bot nhạc của bạn!
-
-### Bước 4: Thiết lập UptimeRobot để giữ bot thức tỉnh 24/7
-Render Free Tier có cơ chế tự động ngủ đông sau 15 phút không nhận được lưu lượng truy cập mạng, điều này sẽ làm bot bị ngắt kết nối khỏi Discord. Để giữ bot luôn hoạt động ổn định:
-1. Đăng ký tài khoản miễn phí tại **[UptimeRobot](https://uptimerobot.com/)**.
-2. Click vào **+ Add New Monitor** ở menu bên trái.
-3. Cấu hình các mục sau:
-   - **Monitor Type**: Chọn `HTTPS`.
-   - **Friendly Name**: Đặt tên bất kỳ (ví dụ: `My Discord Music Bot`).
-   - **URL (or IP)**: Điền liên kết Web Service của Render (ví dụ: `https://ten-bot-cua-ban.onrender.com/`).
-   - **Monitoring Interval**: Đặt là `Every 5 minutes` (Mỗi 5 phút một lần).
-4. Nhấn **Create Monitor** để hoàn thành. UptimeRobot sẽ tự động gửi request "thức tỉnh" Render 5 phút một lần để bot luôn trực tuyến và sẵn sàng phục vụ!
+Giao diện Dashboard cung cấp quyền kiểm soát tuyệt đối mà không cần mở Discord:
+- **Trạng thái Real-time**: Xem bài hát nào đang phát ở từng server khác nhau.
+- **Remote Control**: Nhấn Skip, Pause hoặc thay đổi âm lượng ngay trên trình duyệt.
+- **Cấu hình Cookies**: Dán nội dung `cookies.txt` trực tiếp để giải quyết lỗi "Sign in to confirm you're not a bot".
 
 ---
 
-## 🍪 Hướng Dẫn Thiết Lập Cookies Tránh Lỗi Chặn YouTube
+## 🍪 Hướng Dẫn Trích Xuất Cookies (Bypass Chặn YouTube)
 
-Để giải quyết tình trạng YouTube chặn các tài khoản bot hoặc các bài hát bị giới hạn độ tuổi/yêu cầu đăng nhập, bạn có thể tải lên file cookies từ tài khoản YouTube cá nhân:
+YouTube thường xuyên thay đổi cookies để chặn bot. Để xuất cookies hoạt động ổn định, hãy làm theo phương pháp **Ẩn danh (Incognito)**:
 
-1. Cài đặt tiện ích mở rộng Chrome/Firefox tên là: **Get cookies.txt LOCALLY** hoặc bất kỳ tiện ích trích xuất cookie định dạng Netscape.
-2. Đăng nhập tài khoản Google cá nhân và mở trang **[YouTube.com](https://www.youtube.com)**.
-3. Click vào icon tiện ích mở rộng và tải về file cookie định dạng `.txt` Netscape.
-4. Mở file vừa tải về bằng Notepad, sao chép (Copy) toàn bộ văn bản trong đó.
-5. Truy cập vào giao diện quản trị Web Dashboard của bot nhạc, chuyển sang tab **Cấu hình & Cookies**, dán nội dung vừa sao chép vào phần **Nội dung file cookies.txt** và nhấn **Cập nhật**.
-6. Hệ thống sẽ tự động lưu và khởi động lại trình chơi nhạc để áp dụng cookie giúp bypass chặn YouTube cực kỳ an toàn!
-
----
-
-## 🛡️ Vượt Lỗi YouTube (Bot Detection)
-
-Dự án hiện tại ưu tiên sử dụng file **cookies** để vượt qua các lớp bảo mật của YouTube.
-
-### 1. Sử dụng Cookies (Khuyên dùng)
-Đây là cách ổn định nhất. Hãy copy file `cookie.txt` (định dạng Netscape) vào thư mục `cookies/` của dự án.
-- Tải extension "Get cookies.txt LOCALLY" trên Chrome.
-- Truy cập YouTube, đăng nhập và xuất file cookie.
-- Đổi tên thành `cookie.txt` và để vào thư mục `cookies/`.
-
-### 2. PO Token (Tùy chọn)
-Nếu cookies vẫn bị chặn, bạn có thể cấu hình thêm `YT_PO_TOKEN` trong biến môi trường.
-Format: `YT_PO_TOKEN="TOKEN_CỦA_BẠN"`
-(Hệ thống sẽ tự động thêm prefix `web+` khi gọi lệnh).
-4. Chọn một request bất kỳ có tên là `player` và xem phần **Payload** (hoặc **Request Body** dạng JSON).
-5. Tìm kiếm trường dữ liệu sau:
-   - **PO Token**: Tìm mục `serviceIntegrityDimensions` -> `poToken`. Sao chép chuỗi ký tự dài (bắt đầu bằng `Mn...`).
-   - **Visitor Data**: Tìm mục `context` -> `client` -> `visitorData`. Sao chép chuỗi ký tự ngắn hơn (bắt đầu bằng `Cg...`).
-6. Dán hai chuỗi này vào các biến môi trường của ứng dụng:
-   - `YT_PO_TOKEN` = chuỗi PO Token thu thập được.
-   - `YT_VISITOR_DATA` = chuỗi Visitor Data thu thập được.
-
-Khi cấu hình thành công hai biến này, `yt-dlp` của bot nhạc sẽ tự động sử dụng chữ ký gốc của trình duyệt bạn giúp phát nhạc 100% mượt mà không bao giờ bị chặn nữa!
+1. Mở một cửa sổ **Ẩn danh (Incognito)** mới trên trình duyệt.
+2. Đăng nhập vào YouTube bằng tài khoản của bạn.
+3. Trong cùng cửa sổ đó, truy cập vào: `https://www.youtube.com/robots.txt`.
+4. Sử dụng tiện ích mở rộng (như *Get cookies.txt LOCALLY*) để xuất cookies của `youtube.com`.
+5. **Đóng ngay** cửa sổ ẩn danh đó (Không được mở lại phiên này trên trình duyệt nữa).
+6. Copy nội dung file và dán vào phần cấu hình trên Dashboard của Bot.
 
 ---
 
-## 🔧 Yêu Cầu Gateway Intents Trên Discord Developer Portal
+## 🚀 Cài Đặt & Triển Khai
 
-Để bot hoạt động và phản hồi chính xác, bạn **phải** bật các Intent đặc quyền trong phần cài đặt Bot trên Discord Portal:
-1. Mở trang quản trị ứng dụng Discord tại mục **[Bot Settings](https://discord.com/developers/applications)**.
-2. Tìm kiếm phần **Privileged Gateway Intents**.
-3. Bật kích hoạt cả 3 tùy chọn:
-   - `Presence Intent`
-   - `Server Members Intent`
-   - `Message Content Intent`
-4. Nhấn **Save Changes** để hoàn thành.
+### 1. Biến Môi Trường (Environment Variables)
 
----
+Tạo file `.env` hoặc cấu hình trên Hosting của bạn:
 
-## 👨‍💻 Phát Triển Dưới Local
+| Biến | Mô Tả |
+| :--- | :--- |
+| `BOT_TOKEN` | Token lấy từ Discord Developer Portal. |
+| `CLIENT_ID` | Application ID của Bot. |
+| `SPOTIFY_CLIENT_ID` | (Tùy chọn) Để lấy metadata Spotify chính xác hơn. |
+| `SPOTIFY_CLIENT_SECRET` | (Tùy chọn) Để lấy metadata Spotify chính xác hơn. |
+| `PORT` | Cổng chạy Web Dashboard (Mặc định 3000). |
 
-Nếu muốn chạy thử nghiệm trực tiếp dưới máy cục bộ của bạn:
+### 2. Triển Khai Local
 
 ```bash
-# Cài đặt toàn bộ các thư viện
+# Cài đặt dependencies
 npm install
 
-# Khởi chạy bot và giao diện web dưới môi trường Dev
+# Chạy môi trường phát triển (Auto-reload)
 npm run dev
 
-# Thực hiện build dự án cho bản production
+# Build cho Production
 npm run build
 
-# Chạy bản build chính thức
+# Chạy bản Production
 npm start
 ```
 
-Dự án sẽ tự động kích hoạt máy chủ tại cổng `http://localhost:3000` để bạn theo dõi và điều khiển bot nhạc cực kỳ dễ dàng!
+### 3. Triển Khai Cloud (Render/Cloud Run)
+- **Build Command**: `npm install && npm run build`
+- **Start Command**: `npm start`
+- **Port**: 3000 (HTTP)
+
+---
+
+## 🔧 Yêu Cầu Gateway Intents
+
+Đảm bảo bạn đã bật các **Intents** sau trong [Discord Developer Portal](https://discord.com/developers/applications):
+- `Presence Intent`
+- `Server Members Intent`
+- `Message Content Intent`
+
+---
+
+## 📜 Giấy Phép & Đóng Góp
+
+Dự án được phát triển phục vụ mục đích giải trí và học tập. Mọi đóng góp (Pull Request) đều được chào đón!
