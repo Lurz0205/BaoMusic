@@ -21,7 +21,8 @@ import {
   Eye,
   EyeOff,
   Copy,
-  Plus
+  Plus,
+  AlertCircle
 } from 'lucide-react';
 import { BotStatus, QueueState, TrackData } from './types';
 
@@ -164,7 +165,21 @@ export default function App() {
     fetchData();
     // Poll data every 4 seconds for real-time room controls and stats
     const interval = setInterval(fetchData, 4000);
-    return () => clearInterval(interval);
+    
+    // Smooth progress bar update (local interpolation)
+    const progressInterval = setInterval(() => {
+      setQueues(prevQueues => prevQueues.map(q => {
+        if (q.isPlaying && !q.isPaused && q.currentTrack && q.playbackDuration < q.currentTrack.duration) {
+          return { ...q, playbackDuration: q.playbackDuration + 0.5 };
+        }
+        return q;
+      }));
+    }, 500);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(progressInterval);
+    };
   }, []);
 
   const triggerAlert = (type: 'success' | 'error', message: string) => {
@@ -935,13 +950,21 @@ export default function App() {
                 </label>
               </div>
 
-              <div className="mt-8 p-4 bg-slate-950 rounded-xl border border-slate-800">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Lưu ý quan trọng:</h4>
-                <ul className="text-xs text-slate-500 space-y-1.5 list-disc list-inside">
-                  <li>Không chia sẻ file cookies của bạn cho bất kỳ ai.</li>
-                  <li>Nếu bot vẫn gặp lỗi "Sign in to confirm you're not a bot", hãy làm mới file cookies từ trình duyệt của bạn.</li>
-                  <li>Play-DL và YT-DLP sẽ tự động sử dụng file này sau khi tải lên thành công.</li>
-                </ul>
+              <div className="mt-8 p-6 bg-slate-950 rounded-2xl border border-slate-800">
+                <h4 className="text-sm font-bold text-indigo-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4" />
+                  Hướng dẫn xuất Cookies (Tránh bị xoay vòng):
+                </h4>
+                <div className="text-xs text-slate-400 space-y-3 leading-relaxed">
+                  <p>YouTube thường xuyên thay đổi cookies của tài khoản trên các tab trình duyệt đang mở như một biện pháp bảo mật. Để xuất cookies hoạt động ổn định, bạn cần xuất theo cách không bị thay đổi:</p>
+                  <ol className="list-decimal list-inside space-y-2 ml-2">
+                    <li>Mở một cửa sổ <strong>Ẩn danh (Incognito)</strong> mới và đăng nhập vào YouTube.</li>
+                    <li>Trong cùng cửa sổ và tab đó, truy cập vào: <code className="bg-slate-800 px-1 rounded text-indigo-300">https://www.youtube.com/robots.txt</code> (đây phải là tab ẩn danh duy nhất đang mở).</li>
+                    <li>Sử dụng tiện ích mở rộng để xuất cookies của <code className="text-white">youtube.com</code>.</li>
+                    <li><strong>Đóng ngay</strong> cửa sổ ẩn danh đó để phiên làm việc không bao giờ được mở lại trên trình duyệt nữa.</li>
+                  </ol>
+                  <p className="pt-2 border-t border-slate-800/50 italic text-slate-500">Play-DL và YT-DLP sẽ tự động sử dụng file này sau khi tải lên thành công.</p>
+                </div>
               </div>
             </div>
           </div>

@@ -7,7 +7,6 @@ import { config } from './src/config/index.js';
 import { startBot, stopBot, getBotStatus, getBotClient } from './src/music/bot-client.js';
 import { playerManager } from './src/music/PlayerManager.js';
 import { logger } from './src/utils/logger.js';
-import { initPlayDL } from './src/utils/playdl-init.js';
 import { ensureYtDlp } from './src/utils/youtube-search.js';
 
 import multer from 'multer';
@@ -110,10 +109,7 @@ PORT=${config.port}
 
       fs.renameSync(req.file.path, config.absoluteCookiePath);
       
-      // Re-initialize play-dl with newly supplied cookie credentials
-      await initPlayDL();
-      
-      res.json({ success: true, message: 'Đã cập nhật file cookies.txt thành công! Play-DL đã tải cookie mới.' });
+      res.json({ success: true, message: 'Đã cập nhật file cookies.txt thành công!' });
     } catch (err: any) {
       logger.error('Failed to save cookie file:', err);
       res.status(500).json({ success: false, message: `Lỗi khi lưu file cookie: ${err.message}` });
@@ -137,10 +133,7 @@ PORT=${config.port}
       fs.writeFileSync(config.absoluteCookiePath, cookieText, 'utf8');
       logger.success(`Custom cookies.txt saved to: ${config.absoluteCookiePath}`);
 
-      // Re-initialize play-dl with newly supplied cookie credentials
-      await initPlayDL();
-
-      res.json({ success: true, message: 'Lưu cookie.txt thành công! Play-DL đã tải cookie mới.' });
+      res.json({ success: true, message: 'Lưu cookie.txt thành công!' });
     } catch (err: any) {
       logger.error('Failed to save cookie file:', err);
       res.status(500).json({ success: false, message: `Lỗi ghi file cookie: ${err.message}` });
@@ -274,24 +267,14 @@ PORT=${config.port}
       
       // Now play
       const { Track } = await import('./src/music/Track.js');
-      const { searchYouTube } = await import('./src/utils/youtube-search.js');
       
-      const results = await searchYouTube(query, 1, 'youtube');
-      if (results.length === 0) throw new Error('Không tìm thấy kết quả!');
+      // Use Track.from to handle URLs and search queries correctly
+      const tracks = await Track.from(query, { username: 'Dashboard' });
+      if (tracks.length === 0) throw new Error('Không tìm thấy kết quả!');
       
-      const track = new Track({
-        title: results[0].title,
-        url: results[0].url,
-        thumbnail: results[0].thumbnail || '',
-        duration: results[0].duration,
-        durationString: results[0].durationString,
-        requestedBy: { username: 'Dashboard' },
-        source: 'youtube',
-      });
+      queue.addTracks(tracks);
       
-      queue.addTracks([track]);
-      
-      res.json({ success: true, message: `Đã thêm: ${track.title}` });
+      res.json({ success: true, message: `Đã thêm: ${tracks[0].title}${tracks.length > 1 ? ` và ${tracks.length - 1} bài khác` : ''}` });
     } catch (err: any) {
       logger.error('API Play Error:', err);
       res.status(500).json({ success: false, message: err.message });

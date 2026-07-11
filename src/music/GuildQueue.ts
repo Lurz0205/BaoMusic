@@ -16,7 +16,6 @@ import {
   AudioResource,
   createAudioResource,
 } from '@discordjs/voice';
-import play from 'play-dl';
 import { Track } from './Track.js';
 import { QueueState } from '../types.js';
 import { logger } from '../utils/logger.js';
@@ -535,36 +534,11 @@ export class GuildQueue {
   }
 
   /**
-   * Seek playback (if play-dl seek is possible by re-requesting stream)
+   * Seek playback (Currently disabled after play-dl removal)
    */
   public async seek(seconds: number): Promise<boolean> {
-    if (!this.currentTrack) return false;
-    
-    try {
-      logger.music(`Seeking to ${seconds} seconds for: "${this.currentTrack.title}"`, 'seek');
-      
-      const streamInfo = await play.stream(this.currentTrack.url, {
-        quality: 2,
-        seek: seconds,
-      });
-
-      const resource = createAudioResource(streamInfo.stream, {
-        inputType: streamInfo.type,
-        metadata: this.currentTrack,
-        inlineVolume: true,
-      });
-
-      this.currentResource = resource;
-      if (resource.volume) {
-        resource.volume.setVolume(this.volume / 100);
-      }
-
-      this.player.play(resource);
-      return true;
-    } catch (err) {
-      logger.error(`Error seeking stream:`, err);
-      return false;
-    }
+    logger.warn('Seek is currently disabled.');
+    return false;
   }
 
   /**

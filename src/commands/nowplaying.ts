@@ -23,13 +23,12 @@ export const nowplayingCommand = {
     let durationString = track.durationString;
     
     if (resource) {
-      const currentMs = resource.playbackDuration;
-      const currentSec = Math.floor(currentMs / 1000);
+      const currentSec = queue.playbackDuration;
       const totalSec = track.duration;
       
       const formatTime = (secs: number) => {
         const m = Math.floor(secs / 60);
-        const s = secs % 60;
+        const s = Math.floor(secs % 60);
         return `${m}:${s < 10 ? '0' : ''}${s}`;
       };
 

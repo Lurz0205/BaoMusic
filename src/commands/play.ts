@@ -9,7 +9,6 @@ import {
   ButtonStyle
 } from 'discord.js';
 import { joinVoiceChannel } from '@discordjs/voice';
-import play from 'play-dl';
 import { YouTube } from 'youtube-sr';
 import { playerManager } from '../music/PlayerManager.js';
 import { Track } from '../music/Track.js';

@@ -1,7 +1,6 @@
 import { Client, GatewayIntentBits } from 'discord.js';
 import { config } from '../config/index.js';
 import { registerAllEvents } from '../events/index.js';
-import { initPlayDL } from '../utils/playdl-init.js';
 import { logger } from '../utils/logger.js';
 import { BotStatus } from '../types.js';
 import { playerManager } from './PlayerManager.js';
@@ -29,9 +28,6 @@ export async function startBot(): Promise<boolean> {
     logger.warn('Bot token or Client ID is missing. Discord Bot will not start automatically.');
     return false;
   }
-
-  // Initialize Play-DL cookies and setups
-  await initPlayDL();
 
   try {
     logger.info('Initializing Discord Bot Client...');

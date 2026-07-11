@@ -1,6 +1,6 @@
 # 🎵 Discord Music Bot - Web Control Panel
 
-Một Discord Music Bot **production-ready**, được tối ưu hóa cực kỳ nhẹ RAM và CPU, khởi động cực nhanh và phát nhạc gần như ngay lập tức. Dự án được phát triển hoàn toàn bằng **discord.js v14**, **@discordjs/voice**, và **play-dl** (không sử dụng Lavalink, youtube-dl cũ, hoặc ytdl-core lỗi thời).
+Một Discord Music Bot **production-ready**, được tối ưu hóa cực kỳ nhẹ RAM và CPU, khởi động cực nhanh và phát nhạc gần như ngay lập tức. Dự án được phát triển hoàn toàn bằng **discord.js v14**, **@discordjs/voice**, và **yt-dlp** (không sử dụng Lavalink hoặc các library cũ lỗi thời).
 
 Đặc biệt, dự án tích hợp một **Web Control Panel (Dashboard)** tuyệt đẹp bằng React + Express, cho phép bạn điều khiển trình phát từ xa, cấu hình bot token trực quan và tải lên file `cookies.txt` để bỏ qua lỗi chặn YouTube cực kỳ dễ dàng.
 

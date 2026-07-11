@@ -1,4 +1,3 @@
-import play from 'play-dl';
 import { createAudioResource, AudioResource, StreamType } from '@discordjs/voice';
 import { TrackData } from '../types.js';
 import { logger } from '../utils/logger.js';
@@ -48,13 +47,6 @@ export class Track implements TrackData {
             if (searchResults && searchResults.length > 0) {
               youtubeUrl = searchResults[0].url;
               logger.info(`Found YouTube equivalent for Spotify (yt-dlp): "${searchResults[0].title}"`);
-            } else {
-              // Fallback to play.search
-              const playResults = await play.search(this.title, { limit: 1, source: { youtube: 'video' } });
-              if (playResults && playResults.length > 0) {
-                youtubeUrl = playResults[0].url;
-                logger.info(`Found YouTube equivalent for Spotify (play-dl): "${playResults[0].title}"`);
-              }
             }
           } catch (err: any) {
             logger.error(`YouTube search failed for Spotify conversion:`, err.message || err);
@@ -68,7 +60,7 @@ export class Track implements TrackData {
         }
       }
 
-      // Stream the audio using play-dl (with yt-dlp fallback)
+      // Stream the audio using yt-dlp
       logger.info(`Creating audio stream for: "${this.title}" (${finalUrl})`);
       const stream = await spawnStream(finalUrl);
 
@@ -116,72 +108,94 @@ export class Track implements TrackData {
 
     // 1. Check if the input is a Spotify link
     if (cleanInput.includes('spotify.com')) {
-      try {
+      // Try to use Spotify API if credentials are provided
+      const clientId = process.env.SPOTIFY_CLIENT_ID;
+      const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+
+      if (clientId && clientSecret) {
         try {
-          // Check if play-dl is initialized for Spotify
-          if (play.is_expired()) {
-            logger.info('Spotify token is expired or not loaded. Refreshing Spotify token...');
-            await play.refreshToken();
+          logger.info('Using Spotify API to fetch metadata...');
+          // Get Access Token
+          const authRes = await fetch('https://accounts.spotify.com/api/token', {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Basic ' + Buffer.from(clientId + ':' + clientSecret).toString('base64'),
+              'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: 'grant_type=client_credentials'
+          });
+          const authData: any = await authRes.json();
+          const accessToken = authData.access_token;
+
+          if (accessToken) {
+            // Extract ID from URL
+            const idMatch = cleanInput.match(/\/(track|album|playlist)\/([a-zA-Z0-9]+)/);
+            if (idMatch) {
+              const type = idMatch[1];
+              const id = idMatch[2];
+              
+              if (type === 'track') {
+                const trackRes = await fetch(`https://api.spotify.com/v1/tracks/${id}`, {
+                  headers: { 'Authorization': 'Bearer ' + accessToken }
+                });
+                const t: any = await trackRes.json();
+                const title = `${t.name} - ${t.artists.map((a: any) => a.name).join(', ')}`;
+                
+                logger.info(`Spotify API found track: "${title}". Searching YouTube...`);
+                const results = await searchYouTube(title, 1, 'youtube');
+                return results.map(item => new Track({
+                  title: item.title,
+                  url: item.url,
+                  thumbnail: t.album?.images?.[0]?.url || item.thumbnail,
+                  duration: Math.floor(t.duration_ms / 1000),
+                  durationString: new Date(t.duration_ms).toISOString().substr(14, 5),
+                  requestedBy,
+                  source: 'spotify'
+                }));
+              } else if (type === 'album' || type === 'playlist') {
+                const res = await fetch(`https://api.spotify.com/v1/${type}s/${id}`, {
+                  headers: { 'Authorization': 'Bearer ' + accessToken }
+                });
+                const data: any = await res.json();
+                const spotifyTracks = type === 'album' ? data.tracks.items : data.tracks.items.map((i: any) => i.track);
+                
+                logger.info(`Spotify API found ${spotifyTracks.length} tracks. Converting to YouTube tracks...`);
+                
+                // For playlists, we just return the metadata and let them be resolved when played?
+                // No, we should resolve them now if we want them in the queue.
+                // However, resolving 50 tracks from YouTube now will be SLOW.
+                // We'll return them as Spotify source tracks and let createAudioResource resolve them later.
+                
+                return spotifyTracks.filter((t: any) => t !== null).map((t: any) => new Track({
+                  title: `${t.name} - ${t.artists.map((a: any) => a.name).join(', ')}`,
+                  url: t.external_urls?.spotify || t.href,
+                  thumbnail: data.images?.[0]?.url || '',
+                  duration: Math.floor(t.duration_ms / 1000),
+                  durationString: new Date(t.duration_ms).toISOString().substr(14, 5),
+                  requestedBy,
+                  source: 'spotify'
+                }));
+              }
+            }
           }
         } catch (err: any) {
-          logger.warn(`Spotify token check failed (likely not configured): ${err.message || err}`);
+          logger.error('Spotify API failed:', err.message || err);
         }
-        const spotifyData = await play.spotify(cleanInput);
-        if (spotifyData.type === 'playlist' || spotifyData.type === 'album') {
-          const tracks = await (spotifyData as any).all_tracks();
-          return tracks.map((t: any) => new Track({
-            title: `${t.name} - ${t.artists.map((a: any) => a.name).join(', ')}`,
-            url: t.url,
-            thumbnail: '',
-            duration: t.durationInSec,
-            durationString: new Date(t.durationInSec * 1000).toISOString().substr(14, 5),
-            requestedBy,
-            source: 'spotify'
-          }));
-        } else if (spotifyData.type === 'track') {
-          const t = spotifyData as any;
-          return [new Track({
-            title: `${t.name} - ${t.artists.map((a: any) => a.name).join(', ')}`,
-            url: t.url,
-            thumbnail: t.thumbnail?.url || '',
-            duration: t.durationInSec,
-            durationString: new Date(t.durationInSec * 1000).toISOString().substr(14, 5),
-            requestedBy,
-            source: 'spotify'
-          })];
-        }
-      } catch (err: any) {
-        logger.warn(`Spotify metadata parsing via play-dl failed, trying oEmbed fallback:`, err.message || err);
-        
-        try {
-          // Attempt to get title via Spotify oEmbed (works without API keys)
-          const oEmbedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(cleanInput)}`;
-          const response = await fetch(oEmbedUrl);
-          if (response.ok) {
-            const data: any = await response.json();
-            const title = data.title || 'Unknown Spotify Track';
-            
-            // Search YouTube with the extracted title
-            logger.info(`Searching YouTube for Spotify track: "${title}"`);
-            const results = await searchYouTube(title, 1, 'youtube');
-            
-            return results.map(item => new Track({
-              title: item.title,
-              url: item.url,
-              thumbnail: item.thumbnail,
-              duration: item.duration,
-              durationString: item.durationString,
-              requestedBy,
-              source: 'spotify'
-            }));
-          }
-        } catch (oEmbedErr) {
-          logger.error(`Spotify oEmbed fallback also failed:`, oEmbedErr);
-        }
+      }
 
-        // Final fallback: use yt-dlp metadata directly if it somehow works
-        try {
-          const results = await ytDlpGetMetadata(cleanInput);
+      try {
+        // Attempt to get title via Spotify oEmbed (works without API keys)
+        logger.info(`Extracting Spotify metadata via oEmbed for: ${cleanInput}`);
+        const oEmbedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(cleanInput)}`;
+        const response = await fetch(oEmbedUrl);
+        if (response.ok) {
+          const data: any = await response.json();
+          const title = data.title || 'Unknown Spotify Track';
+          
+          // Search YouTube with the extracted title
+          logger.info(`Searching YouTube for Spotify track: "${title}"`);
+          const results = await searchYouTube(title, 1, 'youtube');
+          
           return results.map(item => new Track({
             title: item.title,
             url: item.url,
@@ -191,10 +205,26 @@ export class Track implements TrackData {
             requestedBy,
             source: 'spotify'
           }));
-        } catch (ytErr: any) {
-          logger.error(`Final yt-dlp fallback also failed for Spotify URL:`, ytErr.message || ytErr);
-          throw new Error(`Không thể lấy thông tin bài hát từ Spotify. Vui lòng kiểm tra lại link hoặc sử dụng link YouTube.`);
         }
+      } catch (oEmbedErr) {
+        logger.error(`Spotify oEmbed failed:`, oEmbedErr);
+      }
+
+      // Fallback: use yt-dlp metadata directly
+      try {
+        const results = await ytDlpGetMetadata(cleanInput);
+        return results.map(item => new Track({
+          title: item.title,
+          url: item.url,
+          thumbnail: item.thumbnail,
+          duration: item.duration,
+          durationString: item.durationString,
+          requestedBy,
+          source: 'spotify'
+        }));
+      } catch (ytErr: any) {
+        logger.error(`Final yt-dlp fallback also failed for Spotify URL:`, ytErr.message || ytErr);
+        throw new Error(`Không thể lấy thông tin bài hát từ Spotify. Vui lòng kiểm tra lại link hoặc sử dụng link YouTube.`);
       }
     }
 
@@ -223,6 +253,7 @@ export class Track implements TrackData {
     // 3. Search query (fallback)
     logger.info(`Searching via yt-dlp for query: "${cleanInput}" (platform: ${platform})`);
     try {
+      // Use scsearch if platform is soundcloud
       const searchResults = await searchYouTube(cleanInput, 1, platform);
       if (searchResults && searchResults.length > 0) {
         const v = searchResults[0];
@@ -233,31 +264,30 @@ export class Track implements TrackData {
           duration: v.duration,
           durationString: v.durationString,
           requestedBy,
-          source: platform === 'unknown' ? 'youtube' : platform as any
+          source: platform === 'soundcloud' ? 'soundcloud' : (platform === 'unknown' ? 'youtube' : platform as any)
         })];
       }
     } catch (err: any) {
       logger.error(`yt-dlp search failed for query "${cleanInput}":`, err.message || err);
     }
 
-    // Try play-dl search as second fallback if yt-dlp search failed
+    // Try searchYouTube one more time with simple query if everything else failed
     try {
-      logger.info(`Trying play-dl search fallback for query: "${cleanInput}"`);
-      const playResults = await play.search(cleanInput, { limit: 1, source: { youtube: 'video' } });
-      if (playResults && playResults.length > 0) {
-        const v = playResults[0];
+      const searchResults = await searchYouTube(cleanInput, 1, 'youtube');
+      if (searchResults && searchResults.length > 0) {
+        const v = searchResults[0];
         return [new Track({
-          title: v.title || 'Unknown',
+          title: v.title,
           url: v.url,
-          thumbnail: (v as any).thumbnails?.[0]?.url || '',
-          duration: (v as any).durationInSec || 0,
-          durationString: (v as any).durationRaw || '0:00',
+          thumbnail: v.thumbnail,
+          duration: v.duration,
+          durationString: v.durationString,
           requestedBy,
           source: 'youtube'
         })];
       }
-    } catch (playErr: any) {
-      logger.error(`play-dl search fallback also failed:`, playErr.message || playErr);
+    } catch (err: any) {
+      logger.error(`Final search fallback failed:`, err.message || err);
     }
 
     throw new Error('Không tìm thấy kết quả hoặc bài hát nào cho yêu cầu này.');
