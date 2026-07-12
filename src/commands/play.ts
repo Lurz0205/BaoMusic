@@ -25,6 +25,17 @@ export const playCommand = {
         .setDescription('Tên bài hát, link YouTube, Spotify, hoặc SoundCloud.')
         .setRequired(true)
         .setAutocomplete(true)
+    )
+    .addStringOption((option) =>
+      option
+        .setName('platform')
+        .setDescription('Nền tảng tìm kiếm (Mặc định: YouTube)')
+        .setRequired(false)
+        .addChoices(
+          { name: 'YouTube', value: 'youtube' },
+          { name: 'SoundCloud', value: 'soundcloud' },
+          { name: 'Spotify', value: 'spotify' }
+        )
     ),
 
   /**
@@ -91,6 +102,7 @@ export const playCommand = {
     }
 
     const input = interaction.options.getString('input', true);
+    const platform = interaction.options.getString('platform') || 'youtube';
 
     try {
       // Connect/Retrieve voice connection
@@ -121,7 +133,7 @@ export const playCommand = {
         avatarUrl: interaction.user.displayAvatarURL() || undefined,
       };
 
-      const tracks = await Track.from(input, requester);
+      const tracks = await Track.from(input, requester, platform);
 
       if (tracks.length === 0) {
         return interaction.editReply('❌ Không thể tìm thấy hoặc xử lý bài hát từ yêu cầu của bạn.');
