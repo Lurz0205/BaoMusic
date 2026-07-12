@@ -3,44 +3,28 @@ import {
   AutocompleteInteraction, 
   GuildMember, 
   SlashCommandBuilder, 
-  EmbedBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle
+  EmbedBuilder
 } from 'discord.js';
 import { joinVoiceChannel } from '@discordjs/voice';
 import { YouTube } from 'youtube-sr';
 import { playerManager } from '../music/PlayerManager.js';
 import { Track } from '../music/Track.js';
 import { logger } from '../utils/logger.js';
-import { YouTubeSearch } from '../utils/youtube-search.js';
 
 export const playCommand = {
   data: new SlashCommandBuilder()
     .setName('play')
-    .setDescription('Phát nhạc từ YouTube, Spotify, SoundCloud hoặc tìm kiếm tên bài hát.')
+    .setDescription('Phát nhạc từ YouTube hoặc tìm kiếm tên bài hát.')
     .addStringOption((option) =>
       option
         .setName('input')
-        .setDescription('Tên bài hát, link YouTube, Spotify, hoặc SoundCloud.')
+        .setDescription('Tên bài hát hoặc link YouTube.')
         .setRequired(true)
         .setAutocomplete(true)
-    )
-    .addStringOption((option) =>
-      option
-        .setName('platform')
-        .setDescription('Nền tảng tìm kiếm (Mặc định: YouTube)')
-        .setRequired(false)
-        .addChoices(
-          { name: 'YouTube', value: 'youtube' },
-          { name: 'SoundCloud', value: 'soundcloud' },
-          { name: 'Spotify', value: 'spotify' }
-        )
     ),
 
   /**
    * Slash command autocomplete search suggestion handler.
-   * Leverages youtube-sr for reliable and fast suggestions.
    */
   async autocomplete(interaction: AutocompleteInteraction) {
     const focusedValue = interaction.options.getFocused();
@@ -54,9 +38,6 @@ export const playCommand = {
     }
 
     try {
-      // 1. YouTube-SR suggestions (fastest)
-      // Use youtube-sr suggestions for autocomplete as it is extremely robust and fast
-      // Wrapped in Promise.race with a 1.5-second timeout so it never exceeds Discord's 3-second limit.
       const timeoutPromise = new Promise<string[]>((resolve) => setTimeout(() => resolve([]), 1500));
       const suggestionsPromise = YouTube.getSuggestions(focusedValue);
       const suggestions = await Promise.race([suggestionsPromise, timeoutPromise]);
@@ -66,7 +47,7 @@ export const playCommand = {
         const formattedTitle = title.length > 95 ? title.slice(0, 92) + '...' : title;
         return {
           name: formattedTitle,
-          value: title, // Value will be the query string, which /play handles fine
+          value: title,
         };
       });
       
@@ -74,8 +55,7 @@ export const playCommand = {
         await interaction.respond(choices);
       }
     } catch (err: any) {
-      logger.warn('Autocomplete via youtube-sr suggestions failed:', err.message || err);
-      // Fail silently for interaction
+      logger.warn('Autocomplete suggestions failed:', err.message || err);
       try {
         if (!interaction.responded) {
           await interaction.respond([]);
@@ -102,7 +82,6 @@ export const playCommand = {
     }
 
     const input = interaction.options.getString('input', true);
-    const platform = interaction.options.getString('platform') || 'youtube';
 
     try {
       // Connect/Retrieve voice connection
@@ -133,7 +112,7 @@ export const playCommand = {
         avatarUrl: interaction.user.displayAvatarURL() || undefined,
       };
 
-      const tracks = await Track.from(input, requester, platform);
+      const tracks = await Track.from(input, requester);
 
       if (tracks.length === 0) {
         return interaction.editReply('❌ Không thể tìm thấy hoặc xử lý bài hát từ yêu cầu của bạn.');
@@ -149,9 +128,8 @@ export const playCommand = {
           embeds: [] 
         });
       } else {
-        const color = tracks[0].source === 'spotify' ? 0x1DB954 : (tracks[0].source === 'soundcloud' ? 0xFF5500 : 0xFF0000);
         const embed = new EmbedBuilder()
-          .setColor(color)
+          .setColor(0xFF0000)
           .setAuthor({ 
             name: '📚 Đã nạp thành công Playlist', 
             iconURL: requester.avatarUrl 

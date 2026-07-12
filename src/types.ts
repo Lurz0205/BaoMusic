@@ -12,7 +12,7 @@ export interface TrackData {
     username: string;
     avatarUrl?: string;
   };
-  source: 'youtube' | 'spotify' | 'soundcloud' | 'unknown';
+  source: 'youtube' | 'unknown';
 }
 
 export interface QueueState {

@@ -236,7 +236,7 @@ export class GuildQueue {
           const channel = client.channels.cache.get(this.textChannelId) || await client.channels.fetch(this.textChannelId).catch(() => null);
           if (channel && channel.isTextBased()) {
             const track = this.currentTrack;
-            const color = track.source === 'spotify' ? 0x1DB954 : (track.source === 'soundcloud' ? 0xFF5500 : 0xFF0000);
+            const color = 0xFF0000;
 
             const embed = new EmbedBuilder()
               .setColor(color)

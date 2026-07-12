@@ -55,7 +55,7 @@ export const nowplayingCommand = {
       }
     }
 
-    const color = track.source === 'spotify' ? '#1DB954' : (track.source === 'soundcloud' ? '#FF5500' : '#FF0000');
+    const color = 0xFF0000;
 
     const embed = new EmbedBuilder()
       .setColor(color)

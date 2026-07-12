@@ -118,7 +118,7 @@ export async function runYtDlp(args: string[]): Promise<string> {
   });
 }
 
-export async function searchYouTube(query: string, limit: number = 5, platform: string = 'youtube'): Promise<YouTubeSearchResult[]> {
+export async function searchYouTube(query: string, limit: number = 5): Promise<YouTubeSearchResult[]> {
   const isUrl = query.startsWith('http://') || query.startsWith('https://');
 
   try {
@@ -132,9 +132,8 @@ export async function searchYouTube(query: string, limit: number = 5, platform: 
         '--no-warnings'
       ];
     } else {
-      const searchPrefix = platform === 'soundcloud' ? `scsearch${limit}:` : `ytsearch${limit}:`;
       baseArgs = [
-        `${searchPrefix}${query}`,
+        `ytsearch${limit}:${query}`,
         '--flat-playlist',
         '--dump-json',
         '--no-warnings'
@@ -247,10 +246,9 @@ export async function spawnStream(url: string): Promise<Readable> {
 }
 
 export const YouTubeSearch = {
-  async search(query: string, options?: { limit?: number; platform?: string }) {
+  async search(query: string, options?: { limit?: number }) {
     const limit = options?.limit || 5;
-    const platform = options?.platform || 'youtube';
-    const results = await searchYouTube(query, limit, platform);
+    const results = await searchYouTube(query, limit);
     return results.map(r => ({
       title: r.title,
       url: r.url,
@@ -260,8 +258,8 @@ export const YouTubeSearch = {
     }));
   },
   
-  async searchOne(query: string, platform: string = 'youtube') {
-    const results = await this.search(query, { limit: 1, platform });
+  async searchOne(query: string) {
+    const results = await this.search(query, { limit: 1 });
     return results.length > 0 ? results[0] : null;
   },
 
