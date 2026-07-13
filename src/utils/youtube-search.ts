@@ -53,7 +53,9 @@ export async function ensureYtDlp(): Promise<string> {
 function buildYtDlpArgs(baseArgs: string[]): string[] {
   const args = [...baseArgs];
 
-  const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+  // Modern User-Agent
+  const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
+  
   args.push('--user-agent', userAgent);
   args.push('--force-ipv4');
   args.push('--no-check-certificates');
@@ -61,17 +63,28 @@ function buildYtDlpArgs(baseArgs: string[]): string[] {
   args.push('--referer', 'https://www.youtube.com/');
   args.push('--no-cache-dir');
   args.push('--js-runtimes', `node:${process.execPath}`);
+  
+  // Advanced anti-bot measures
   args.push('--add-header', 'Accept-Language: en-US,en;q=0.9');
-  args.push('--add-header', 'Sec-Fetch-Mode: navigate');
+  args.push('--add-header', 'Sec-Ch-Ua: "Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"');
+  args.push('--add-header', 'Sec-Ch-Ua-Mobile: ?0');
+  args.push('--add-header', 'Sec-Ch-Ua-Platform: "Windows"');
+  
+  // Use impersonate if possible (latest yt-dlp)
+  args.push('--impersonate', 'chrome');
+
+  // Always use optimized extractor-args for YouTube
+  // Android/iOS clients are generally more lenient with bot detection
+  args.push('--extractor-args', 'youtube:player_client=android,web;player_skip=dashboard,stats');
   
   if (config.hasCookies) {
     const resolvedPath = config.absoluteCookiePath;
     if (fs.existsSync(resolvedPath)) {
       args.push('--cookies', resolvedPath);
+      logger.info(`Using cookies from: ${resolvedPath}`);
+    } else {
+      logger.warn(`Cookie file not found at: ${resolvedPath}`);
     }
-  } else {
-    // Default extractor args to help with bot detection if no cookies provided
-    args.push('--extractor-args', 'youtube:player_client=ios,android,web');
   }
   
   const proxy = process.env.YT_PROXY;
