@@ -1,7 +1,7 @@
 import { config } from '../config/index.js';
 import fs from 'fs';
 import { logger } from './logger.js';
-import { execFile, spawn, execSync } from 'child_process';
+import { execFile, spawn, execSync, exec } from 'child_process';
 import path from 'path';
 import { Readable } from 'stream';
 import { YouTube } from 'youtube-sr';
@@ -18,27 +18,34 @@ export interface YouTubeSearchResult {
 const ROOT_DIR = process.cwd();
 const YTDLP_PATH = path.join(ROOT_DIR, 'bin', 'yt-dlp');
 
-export async function ensureYtDlp(): Promise<string> {
+export async function ensureYtDlp(force: boolean = false): Promise<string> {
   const binDir = path.join(ROOT_DIR, 'bin');
   if (!fs.existsSync(binDir)) {
     fs.mkdirSync(binDir, { recursive: true });
   }
 
   const stats = fs.existsSync(YTDLP_PATH) ? fs.statSync(YTDLP_PATH) : null;
-  const shouldDownload = !stats || (Date.now() - stats.mtimeMs > 6 * 60 * 60 * 1000);
+  // If force is true, or binary doesn't exist, or it's older than 12 hours
+  const shouldDownload = force || !stats || (Date.now() - stats.mtimeMs > 12 * 60 * 60 * 1000);
   
   if (shouldDownload) {
-    logger.info('Updating yt-dlp binary to the latest version...');
+    logger.info(force ? 'FORCING yt-dlp binary update...' : 'Checking for yt-dlp updates...');
     const url = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux';
     try {
+      // Use a temporary path first to avoid corrupting the current binary if download fails
+      const tempPath = `${YTDLP_PATH}.new`;
+      
       await new Promise((resolve, reject) => {
-        import('child_process').then(cp => {
-          cp.exec(`curl -L ${url} -o "${YTDLP_PATH}"`, (err) => {
-            if (err) reject(err); else resolve(null);
-          });
+        const cp = exec(`curl -L ${url} -o "${tempPath}"`, (err) => {
+          if (err) reject(err); else resolve(null);
         });
       });
-      fs.chmodSync(YTDLP_PATH, 0o755);
+
+      if (fs.existsSync(tempPath)) {
+        fs.chmodSync(tempPath, 0o755);
+        fs.renameSync(tempPath, YTDLP_PATH);
+        logger.success('yt-dlp has been updated to the latest version.');
+      }
     } catch (err) {
       logger.error('Failed to update yt-dlp:', err);
       if (!fs.existsSync(YTDLP_PATH)) {

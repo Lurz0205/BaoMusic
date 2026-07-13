@@ -307,13 +307,25 @@ PORT=${config.port}
     });
   }
 
+  app.post('/api/settings/update-ytdlp', async (req, res) => {
+    try {
+      logger.info('Manual yt-dlp update requested from dashboard');
+      const binaryPath = await ensureYtDlp(true);
+      res.json({ success: true, message: 'Đã cập nhật yt-dlp lên phiên bản mới nhất thành công!', path: binaryPath });
+    } catch (err: any) {
+      logger.error('Manual yt-dlp update failed:', err);
+      res.status(500).json({ success: false, message: `Lỗi cập nhật yt-dlp: ${err.message}` });
+    }
+  });
+
   // --- Start Server ---
   app.listen(PORT, '0.0.0.0', () => {
     logger.success(`Server running on http://localhost:${PORT}`);
     // Start Discord Bot silently in background
     (async () => {
       try {
-        await ensureYtDlp();
+        // Force check and update yt-dlp on every startup
+        await ensureYtDlp(true);
         startBot();
       } catch (err) {
         logger.error('Failed to start bot', err);

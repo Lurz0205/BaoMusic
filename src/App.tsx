@@ -57,6 +57,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'status' | 'guide' | 'settings'>('status');
   const [cookieInfo, setCookieInfo] = useState<{ exists: boolean, lastUpdated: string | null } | null>(null);
   const [uploadingCookie, setUploadingCookie] = useState(false);
+  const [updatingYtDlp, setUpdatingYtDlp] = useState(false);
 
   // Fetch cookie info
   const fetchCookieInfo = async () => {
@@ -221,6 +222,23 @@ export default function App() {
       triggerAlert('error', `Lỗi kết nối: ${err.message}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdateYtDlp = async () => {
+    setUpdatingYtDlp(true);
+    try {
+      const res = await fetch('/api/settings/update-ytdlp', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        triggerAlert('success', data.message);
+      } else {
+        triggerAlert('error', data.message || 'Lỗi cập nhật yt-dlp.');
+      }
+    } catch (err: any) {
+      triggerAlert('error', `Lỗi kết nối: ${err.message}`);
+    } finally {
+      setUpdatingYtDlp(false);
     }
   };
 
@@ -965,6 +983,35 @@ export default function App() {
                   </ol>
                   <p className="pt-2 border-t border-slate-800/50 italic text-slate-500">Play-DL và YT-DLP sẽ tự động sử dụng file này sau khi tải lên thành công.</p>
                 </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-xl">
+              <div className="flex items-center space-x-4 mb-8">
+                <div className="p-3 bg-indigo-500/10 text-indigo-500 rounded-2xl border border-indigo-500/20">
+                  <Terminal className="w-8 h-8" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-white tracking-tight">Quản lý Hệ thống</h2>
+                  <p className="text-sm text-slate-400">Cập nhật các thành phần lõi của bot.</p>
+                </div>
+              </div>
+
+              <div className="bg-slate-950/50 p-6 rounded-2xl border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <h4 className="text-base font-bold text-white">Yên tâm với phiên bản yt-dlp mới nhất</h4>
+                  <p className="text-xs text-slate-400 max-w-md">
+                    YouTube thường xuyên cập nhật làm các phiên bản cũ bị lỗi "Sign in to confirm you're not a bot". Nhấn nút này để bot tự tải về bản vá mới nhất.
+                  </p>
+                </div>
+                <button
+                  onClick={handleUpdateYtDlp}
+                  disabled={updatingYtDlp}
+                  className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold px-6 py-3 rounded-xl text-sm transition-all duration-200 flex items-center gap-2 shadow-lg shadow-indigo-500/20 border border-indigo-400/30 whitespace-nowrap"
+                >
+                  <RefreshCw className={`w-4 h-4 ${updatingYtDlp ? 'animate-spin' : ''}`} />
+                  {updatingYtDlp ? 'Đang cập nhật...' : 'Cập nhật yt-dlp ngay'}
+                </button>
               </div>
             </div>
           </div>
