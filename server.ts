@@ -7,7 +7,7 @@ import { config } from './src/config/index.js';
 import { startBot, stopBot, getBotStatus, getBotClient } from './src/music/bot-client.js';
 import { playerManager } from './src/music/PlayerManager.js';
 import { logger } from './src/utils/logger.js';
-import { ensureYtDlp } from './src/utils/youtube-search.js';
+import { ensureYtDlp, YouTubeSearch } from './src/utils/youtube-search.js';
 
 import multer from 'multer';
 
@@ -311,10 +311,20 @@ PORT=${config.port}
     try {
       logger.info('Manual yt-dlp update requested from dashboard');
       const binaryPath = await ensureYtDlp(true);
-      res.json({ success: true, message: 'Đã cập nhật yt-dlp lên phiên bản mới nhất thành công!', path: binaryPath });
+      const version = await YouTubeSearch.getVersion();
+      res.json({ success: true, message: `Đã cập nhật yt-dlp lên phiên bản mới nhất: ${version}`, path: binaryPath, version });
     } catch (err: any) {
       logger.error('Manual yt-dlp update failed:', err);
       res.status(500).json({ success: false, message: `Lỗi cập nhật yt-dlp: ${err.message}` });
+    }
+  });
+
+  app.get('/api/settings/ytdlp-version', async (req, res) => {
+    try {
+      const version = await YouTubeSearch.getVersion();
+      res.json({ version });
+    } catch (err) {
+      res.status(500).json({ version: 'Unknown' });
     }
   });
 

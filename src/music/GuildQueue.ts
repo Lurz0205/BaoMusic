@@ -72,6 +72,15 @@ export class GuildQueue {
     this.onDestroy = onDestroy;
 
     this.player = createAudioPlayer();
+    
+    // Increase max listeners significantly to prevent memory leak warnings during rapid state changes
+    try {
+      this.player.setMaxListeners(100);
+      this.connection.setMaxListeners(100);
+    } catch (e) {
+      logger.warn('Failed to setMaxListeners on player or connection:', e);
+    }
+
     this.connection.subscribe(this.player);
 
     this.setupPlayerListeners();
@@ -103,6 +112,7 @@ export class GuildQueue {
 
 
 
+  private isEnteringState = false;
   /**
    * Set up voice connection status listeners to handle disconnects and reconnects gracefully.
    */
@@ -135,6 +145,8 @@ export class GuildQueue {
         this.destroy();
       } else if (newState.status === VoiceConnectionStatus.Connecting || newState.status === VoiceConnectionStatus.Signalling) {
         // Prevent voice connection freeze during signallings
+        if (this.isEnteringState) return;
+        this.isEnteringState = true;
         try {
           await entersState(this.connection, VoiceConnectionStatus.Ready, 15_000);
         } catch (err) {
@@ -142,6 +154,8 @@ export class GuildQueue {
             logger.error(`Voice channel signaling timed out for "${this.guildName}". Destroying connection.`, err);
             this.connection.destroy();
           }
+        } finally {
+          this.isEnteringState = false;
         }
       }
     });
@@ -561,12 +575,14 @@ export class GuildQueue {
 
     try {
       this.player.stop();
+      this.player.removeAllListeners();
     } catch {}
 
     try {
       if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
         this.connection.destroy();
       }
+      this.connection.removeAllListeners();
     } catch {}
 
     if (this.onDestroy) {

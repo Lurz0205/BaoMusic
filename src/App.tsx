@@ -56,6 +56,7 @@ export default function App() {
   // UI states
   const [activeTab, setActiveTab] = useState<'status' | 'guide' | 'settings'>('status');
   const [cookieInfo, setCookieInfo] = useState<{ exists: boolean, lastUpdated: string | null } | null>(null);
+  const [ytDlpVersion, setYtDlpVersion] = useState<string>('Đang kiểm tra...');
   const [uploadingCookie, setUploadingCookie] = useState(false);
   const [updatingYtDlp, setUpdatingYtDlp] = useState(false);
 
@@ -70,8 +71,19 @@ export default function App() {
     }
   };
 
+  const fetchYtDlpVersion = async () => {
+    try {
+      const res = await fetch('/api/settings/ytdlp-version');
+      const data = await res.json();
+      setYtDlpVersion(data.version);
+    } catch (err) {
+      setYtDlpVersion('Lỗi');
+    }
+  };
+
   useEffect(() => {
     fetchCookieInfo();
+    fetchYtDlpVersion();
   }, []);
 
   const handleCookieUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -232,6 +244,7 @@ export default function App() {
       const data = await res.json();
       if (res.ok && data.success) {
         triggerAlert('success', data.message);
+        if (data.version) setYtDlpVersion(data.version);
       } else {
         triggerAlert('error', data.message || 'Lỗi cập nhật yt-dlp.');
       }
@@ -1002,6 +1015,9 @@ export default function App() {
                   <h4 className="text-base font-bold text-white">Yên tâm với phiên bản yt-dlp mới nhất</h4>
                   <p className="text-xs text-slate-400 max-w-md">
                     YouTube thường xuyên cập nhật làm các phiên bản cũ bị lỗi "Sign in to confirm you're not a bot". Nhấn nút này để bot tự tải về bản vá mới nhất.
+                  </p>
+                  <p className="text-[10px] font-mono text-indigo-400 mt-2">
+                    Phiên bản hiện tại: <span className="bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">{ytDlpVersion}</span>
                   </p>
                 </div>
                 <button

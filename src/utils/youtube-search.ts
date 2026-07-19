@@ -266,6 +266,16 @@ export async function spawnStream(url: string): Promise<Readable> {
 }
 
 export const YouTubeSearch = {
+  async getVersion(): Promise<string> {
+    const binPath = await ensureYtDlp();
+    return new Promise((resolve) => {
+      execFile(binPath, ['--version'], (error, stdout) => {
+        if (error) resolve('Unknown');
+        else resolve(stdout.trim());
+      });
+    });
+  },
+
   async search(query: string, options?: { limit?: number }) {
     const limit = options?.limit || 5;
     const results = await searchYouTube(query, limit);
