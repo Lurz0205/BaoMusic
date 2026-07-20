@@ -2,6 +2,7 @@ import { createAudioResource, AudioResource, StreamType } from '@discordjs/voice
 import { TrackData } from '../types.js';
 import { logger } from '../utils/logger.js';
 import { ytDlpGetMetadata, searchYouTube, spawnStream } from '../utils/youtube-search.js';
+import { SpotifyUtils } from '../utils/spotify.js';
 
 export class Track implements TrackData {
   public readonly title: string;
@@ -13,7 +14,7 @@ export class Track implements TrackData {
     username: string;
     avatarUrl?: string;
   };
-  public readonly source: 'youtube' | 'unknown';
+  public readonly source: 'youtube' | 'unknown' | 'spotify';
 
   constructor(data: TrackData) {
     this.title = data.title;
@@ -30,8 +31,22 @@ export class Track implements TrackData {
    */
   public async createAudioResource(retryCount = 0): Promise<AudioResource<Track>> {
     try {
-      logger.info(`Creating audio stream via yt-dlp for: "${this.title}" (${this.url})`);
-      const stream = await spawnStream(this.url);
+      let playUrl = this.url;
+
+      // If it's a Spotify track, we need to find its YouTube equivalent first if we haven't already
+      if (this.source === 'spotify' || playUrl.includes('spotify.com')) {
+        logger.info(`Searching YouTube equivalent for Spotify track: "${this.title}"`);
+        const searchResults = await searchYouTube(`${this.title}`, 1);
+        if (searchResults && searchResults.length > 0) {
+          playUrl = searchResults[0].url;
+          logger.info(`Found YouTube equivalent for Spotify: ${playUrl}`);
+        } else {
+          throw new Error('Không tìm thấy bản phối YouTube cho bài hát Spotify này.');
+        }
+      }
+
+      logger.info(`Creating audio stream via yt-dlp for: "${this.title}" (${playUrl})`);
+      const stream = await spawnStream(playUrl);
 
       const resource = createAudioResource(stream, {
         inputType: StreamType.Arbitrary,
@@ -62,13 +77,54 @@ export class Track implements TrackData {
   }
 
   /**
-   * Parse arbitrary user input or URL into Track objects using yt-dlp
+   * Parse arbitrary user input or URL into Track objects using yt-dlp or Spotify API
    */
   public static async from(
     input: string,
     requestedBy: { username: string; avatarUrl?: string }
   ): Promise<Track[]> {
     const cleanInput = input.trim();
+
+    // Handle Spotify URLs
+    if (SpotifyUtils.isSpotifyUrl(cleanInput)) {
+      try {
+        if (cleanInput.includes('/track/')) {
+          const info = await SpotifyUtils.getTrackInfo(cleanInput);
+          if (info) {
+            return [new Track({
+              title: `${info.title} - ${info.artist}`,
+              url: info.url,
+              duration: 0,
+              durationString: '--:--',
+              requestedBy,
+              source: 'spotify'
+            })];
+          }
+        } else if (cleanInput.includes('/playlist/')) {
+          const tracks = await SpotifyUtils.getPlaylistTracks(cleanInput);
+          return tracks.map(t => new Track({
+            title: `${t.title} - ${t.artist}`,
+            url: t.url,
+            duration: 0,
+            durationString: '--:--',
+            requestedBy,
+            source: 'spotify'
+          }));
+        } else if (cleanInput.includes('/album/')) {
+          const tracks = await SpotifyUtils.getAlbumTracks(cleanInput);
+          return tracks.map(t => new Track({
+            title: `${t.title} - ${t.artist}`,
+            url: t.url,
+            duration: 0,
+            durationString: '--:--',
+            requestedBy,
+            source: 'spotify'
+          }));
+        }
+      } catch (err: any) {
+        logger.error(`Spotify resolution failed for "${cleanInput}":`, err.message || err);
+      }
+    }
 
     // Handle direct URLs
     if (cleanInput.startsWith('http://') || cleanInput.startsWith('https://')) {

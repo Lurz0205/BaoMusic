@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 
 export async function execute(interaction: ChatInputCommandInteraction) {
-  const dashboardUrl = process.env.APP_URL || `http://localhost:3000`;
+  const dashboardUrl = 'https://baomusic-4rk8.onrender.com';
   
   await interaction.reply({
     content: `🌐 **Bảng điều khiển Web của Bot:**\n${dashboardUrl}\n\n*Bạn có thể điều khiển nhạc, quản lý hàng đợi và cấu hình bot tại đây.*`,
