@@ -1,10 +1,28 @@
 import { config } from '../config/index.js';
 import fs from 'fs';
 import { logger } from './logger.js';
-import { execFile, spawn, execSync, exec } from 'child_process';
+import { execFile, spawn, exec } from 'child_process';
 import path from 'path';
-import { Readable } from 'stream';
+import { PassThrough, Readable } from 'stream';
 import { YouTube } from 'youtube-sr';
+import {
+  Ytdl,
+  Quality,
+  SearchType,
+  chooseFormat,
+  parseVideoId,
+  parsePlaylistId,
+} from '@distube/ytdl-core';
+import { Innertube, Log, UniversalCache } from 'youtubei.js';
+import ffmpegStatic from 'ffmpeg-static';
+
+// Ensure prism-media / @discordjs/voice has ffmpeg path
+if (!process.env.FFMPEG_PATH && ffmpegStatic) {
+  process.env.FFMPEG_PATH = ffmpegStatic;
+}
+
+// Silence verbose parser warnings from youtubei.js
+Log.setLevel(Log.Level.NONE);
 
 export interface YouTubeSearchResult {
   id: string;
@@ -18,6 +36,143 @@ export interface YouTubeSearchResult {
 const ROOT_DIR = process.cwd();
 const YTDLP_PATH = path.join(ROOT_DIR, 'bin', 'yt-dlp');
 
+// Singleton instances to maintain session health, PO token worker, and cache
+let ytdlInstance: Ytdl | null = null;
+let innertubePromise: Promise<Innertube> | null = null;
+
+function getYtdl(): Ytdl {
+  if (!ytdlInstance) {
+    ytdlInstance = new Ytdl({
+      lang: 'en',
+      country: 'US',
+      timeoutMs: 25000,
+    });
+  }
+  return ytdlInstance;
+}
+
+async function getInnertube(): Promise<Innertube> {
+  if (!innertubePromise) {
+    innertubePromise = Innertube.create({
+      cache: new UniversalCache(false),
+      generate_session_locally: true,
+      lang: 'en',
+      location: 'US',
+    }).catch((err) => {
+      innertubePromise = null;
+      throw err;
+    });
+  }
+  return innertubePromise;
+}
+
+function isYouTubeUrl(url: string): boolean {
+  return /^(https?:\/\/)?(www\.|m\.|music\.)?(youtube\.com|youtu\.be)\//i.test(url.trim());
+}
+
+function formatDuration(durationSec: number): string {
+  if (isNaN(durationSec) || durationSec <= 0) return '0:00';
+  const hours = Math.floor(durationSec / 3600);
+  const minutes = Math.floor((durationSec % 3600) / 60);
+  const seconds = Math.floor(durationSec % 60);
+
+  const parts: (number | string)[] = [];
+  if (hours > 0) {
+    parts.push(hours);
+    parts.push(minutes.toString().padStart(2, '0'));
+  } else {
+    parts.push(minutes);
+  }
+  parts.push(seconds.toString().padStart(2, '0'));
+  return parts.join(':');
+}
+
+function cleanTitleForSearch(title: string): string {
+  return title
+    .replace(/\(Official\s*(Music\s*)?(Video|Audio)\)/gi, '')
+    .replace(/\[Official\s*(Music\s*)?(Video|Audio)\]/gi, '')
+    .replace(/\(Lyric(s)?\s*(Video)?\)/gi, '')
+    .replace(/\[MV\]/gi, '')
+    .replace(/\(4K\s*Remaster\)/gi, '')
+    .replace(/\|\s*(Official\s*)?(Music\s*)?(Video|Audio|Lyrics?|MV)\b/gi, '')
+    .replace(/\|/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Verifies that a Readable stream actually produces initial audio bytes
+ * before handing it off to @discordjs/voice, catching 403/SABR/process failures early
+ * so fallback engines can take over cleanly.
+ */
+function verifyStreamStarts(source: Readable, timeoutMs = 15000, onCloseCleanup?: () => void): Promise<Readable> {
+  return new Promise((resolve, reject) => {
+    const pass = new PassThrough({ highWaterMark: 1 << 16 });
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        cleanup();
+        source.destroy();
+        onCloseCleanup?.();
+        reject(new Error(`Stream timed out after ${timeoutMs}ms waiting for first audio bytes`));
+      }
+    }, timeoutMs);
+
+    const onData = (chunk: Buffer) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        cleanup();
+        pass.write(chunk);
+        source.pipe(pass);
+        source.on('error', (err) => {
+          if (!pass.destroyed) pass.destroy(err);
+        });
+        pass.on('close', () => {
+          if (!source.destroyed) source.destroy();
+          onCloseCleanup?.();
+        });
+        source.on('close', () => {
+          onCloseCleanup?.();
+        });
+        resolve(pass);
+      }
+    };
+
+    const onError = (err: Error) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        cleanup();
+        onCloseCleanup?.();
+        reject(err);
+      }
+    };
+
+    const onEnd = () => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        cleanup();
+        onCloseCleanup?.();
+        reject(new Error('Stream ended with 0 bytes'));
+      }
+    };
+
+    const cleanup = () => {
+      source.removeListener('data', onData);
+      source.removeListener('error', onError);
+      source.removeListener('end', onEnd);
+    };
+
+    source.on('data', onData);
+    source.on('error', onError);
+    source.on('end', onEnd);
+  });
+}
+
 export async function ensureYtDlp(force: boolean = false): Promise<string> {
   const binDir = path.join(ROOT_DIR, 'bin');
   if (!fs.existsSync(binDir)) {
@@ -25,19 +180,18 @@ export async function ensureYtDlp(force: boolean = false): Promise<string> {
   }
 
   const stats = fs.existsSync(YTDLP_PATH) ? fs.statSync(YTDLP_PATH) : null;
-  // If force is true, or binary doesn't exist, or it's older than 12 hours
   const shouldDownload = force || !stats || (Date.now() - stats.mtimeMs > 12 * 60 * 60 * 1000);
-  
+
   if (shouldDownload) {
     logger.info(force ? 'FORCING yt-dlp binary update...' : 'Checking for yt-dlp updates...');
     const url = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux';
     try {
-      // Use a temporary path first to avoid corrupting the current binary if download fails
       const tempPath = `${YTDLP_PATH}.new`;
-      
+
       await new Promise((resolve, reject) => {
-        const cp = exec(`curl -L ${url} -o "${tempPath}"`, (err) => {
-          if (err) reject(err); else resolve(null);
+        exec(`curl -L ${url} -o "${tempPath}"`, (err) => {
+          if (err) reject(err);
+          else resolve(null);
         });
       });
 
@@ -57,76 +211,49 @@ export async function ensureYtDlp(force: boolean = false): Promise<string> {
   return YTDLP_PATH;
 }
 
-function buildYtDlpArgs(baseArgs: string[]): string[] {
+/**
+ * Modern 2026 yt-dlp arguments:
+ * - No broken --impersonate chrome or stale Chrome/121 headers
+ * - No broken android,web player_client override
+ * - Enables Node JS runtime + remote EJS solver for YouTube n-challenges (with caching enabled)
+ * - Cookie-free by default (cookies only used if explicitly requested)
+ */
+function buildYtDlpArgs(baseArgs: string[], useCookies = false): string[] {
   const args = [...baseArgs];
 
-  // Modern User-Agent
-  const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
-  
-  args.push('--user-agent', userAgent);
   args.push('--force-ipv4');
   args.push('--no-check-certificates');
-  args.push('--geo-bypass');
-  args.push('--referer', 'https://www.youtube.com/');
-  args.push('--no-cache-dir');
   args.push('--js-runtimes', `node:${process.execPath}`);
-  
-  // Advanced anti-bot measures
-  args.push('--add-header', 'Accept-Language: en-US,en;q=0.9');
-  args.push('--add-header', 'Sec-Ch-Ua: "Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"');
-  args.push('--add-header', 'Sec-Ch-Ua-Mobile: ?0');
-  args.push('--add-header', 'Sec-Ch-Ua-Platform: "Windows"');
-  
-  // Use impersonate if possible (latest yt-dlp)
-  args.push('--impersonate', 'chrome');
+  args.push('--remote-components', 'ejs:github');
 
-  // Always use optimized extractor-args for YouTube
-  // Android/iOS clients are generally more lenient with bot detection
-  args.push('--extractor-args', 'youtube:player_client=android,web;player_skip=dashboard,stats');
-  
-  if (config.hasCookies) {
+  if (ffmpegStatic) {
+    args.push('--ffmpeg-location', ffmpegStatic);
+  }
+
+  if (useCookies && config.hasCookies) {
     const resolvedPath = config.absoluteCookiePath;
     if (fs.existsSync(resolvedPath)) {
       args.push('--cookies', resolvedPath);
-      logger.info(`Using cookies from: ${resolvedPath}`);
-    } else {
-      logger.warn(`Cookie file not found at: ${resolvedPath}`);
+      logger.info(`Using fallback cookies from: ${resolvedPath}`);
     }
   }
-  
+
   const proxy = process.env.YT_PROXY;
   if (proxy) args.push('--proxy', proxy);
 
   return args;
 }
 
-function formatDuration(durationSec: number): string {
-  if (isNaN(durationSec) || durationSec <= 0) return '0:00';
-  const hours = Math.floor(durationSec / 3600);
-  const minutes = Math.floor((durationSec % 3600) / 60);
-  const seconds = Math.floor(durationSec % 60);
-  
-  const parts = [];
-  if (hours > 0) {
-    parts.push(hours);
-    parts.push(minutes.toString().padStart(2, '0'));
-  } else {
-    parts.push(minutes);
-  }
-  parts.push(seconds.toString().padStart(2, '0'));
-  return parts.join(':');
-}
-
 export async function runYtDlp(args: string[]): Promise<string> {
   const binaryPath = await ensureYtDlp();
   return new Promise((resolve, reject) => {
-    logger.info(`Running yt-dlp search/metadata command...`);
-    
+    logger.info('Running yt-dlp fallback command...');
+
     execFile(binaryPath, args, { maxBuffer: 15 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (stderr && (stderr.includes('Sign in') || stderr.includes('bot'))) {
-        logger.error(`yt-dlp detected as bot! Output: ${stderr.trim()}`);
+        logger.warn(`yt-dlp bot warning: ${stderr.trim()}`);
       }
-      
+
       if (error) {
         if (stdout.trim()) {
           return resolve(stdout);
@@ -138,35 +265,182 @@ export async function runYtDlp(args: string[]): Promise<string> {
   });
 }
 
-export async function searchYouTube(query: string, limit: number = 5): Promise<YouTubeSearchResult[]> {
-  const isUrl = query.startsWith('http://') || query.startsWith('https://');
-
+async function resolveYouTubeTitleOEmbed(url: string): Promise<string | null> {
   try {
-    let baseArgs: string[];
-    
-    if (isUrl) {
-      baseArgs = [
-        query,
-        '--flat-playlist',
-        '--dump-json',
-        '--no-warnings'
-      ];
-    } else {
-      baseArgs = [
-        `ytsearch${limit}:${query}`,
-        '--flat-playlist',
-        '--dump-json',
-        '--no-warnings'
-      ];
+    const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
+    if (!res.ok) return null;
+    const data = (await res.json()) as { title?: string };
+    return data.title || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function searchYouTube(query: string, limit: number = 5): Promise<YouTubeSearchResult[]> {
+  const cleanQuery = query.trim();
+  const isUrl = cleanQuery.startsWith('http://') || cleanQuery.startsWith('https://');
+  const ytUrl = isUrl && isYouTubeUrl(cleanQuery);
+
+  // 1. Handle YouTube URLs natively via @distube/ytdl-core -> youtubei.js -> yt-dlp
+  if (ytUrl) {
+    const videoId = parseVideoId(cleanQuery);
+    const playlistId = parsePlaylistId(cleanQuery);
+    const isExplicitPlaylist = cleanQuery.includes('/playlist') || (!videoId && !!playlistId);
+
+    // 1a. Playlist URL
+    if (isExplicitPlaylist && playlistId) {
+      try {
+        const yt = getYtdl();
+        const playlist = await yt.getPlaylist(cleanQuery, { limit: Math.max(limit, 50) });
+        if (playlist.videos.length > 0) {
+          return playlist.videos.slice(0, limit).map((v) => ({
+            id: v.id,
+            title: v.title || 'Unknown Title',
+            url: v.url || `https://www.youtube.com/watch?v=${v.id}`,
+            thumbnail: v.thumbnails?.[0]?.url || '',
+            duration: v.lengthSeconds || 0,
+            durationString: formatDuration(v.lengthSeconds || 0),
+          }));
+        }
+      } catch (err: any) {
+        logger.warn(`ytdl-core getPlaylist failed for "${cleanQuery}": ${err.message || err}`);
+      }
+
+      try {
+        const innertube = await getInnertube();
+        const playlist = await innertube.getPlaylist(playlistId);
+        const items = (playlist.items || [])
+          .filter((item: any) => item.id)
+          .slice(0, limit)
+          .map((item: any) => {
+            const sec = item.duration?.seconds || 0;
+            return {
+              id: item.id,
+              title: item.title?.text || item.title?.toString() || 'Unknown Title',
+              url: `https://www.youtube.com/watch?v=${item.id}`,
+              thumbnail: item.thumbnails?.[0]?.url || '',
+              duration: sec,
+              durationString: item.duration?.text || formatDuration(sec),
+            };
+          });
+        if (items.length > 0) return items;
+      } catch (err: any) {
+        logger.warn(`youtubei.js getPlaylist failed for "${cleanQuery}": ${err.message || err}`);
+      }
     }
 
-    const args = buildYtDlpArgs(baseArgs);
+    // 1b. Single Video URL
+    if (videoId) {
+      try {
+        const yt = getYtdl();
+        const info = await yt.getInfo(videoId);
+        const d = info.videoDetails;
+        return [
+          {
+            id: d.id,
+            title: d.title || 'Unknown Title',
+            url: d.url || `https://www.youtube.com/watch?v=${d.id}`,
+            thumbnail: d.thumbnails?.[d.thumbnails.length - 1]?.url || d.thumbnails?.[0]?.url || '',
+            duration: d.lengthSeconds || 0,
+            durationString: formatDuration(d.lengthSeconds || 0),
+          },
+        ];
+      } catch (err: any) {
+        logger.warn(`ytdl-core getInfo failed for "${cleanQuery}": ${err.message || err}`);
+      }
+
+      try {
+        const innertube = await getInnertube();
+        const info = await innertube.getBasicInfo(videoId);
+        const b = info.basic_info;
+        const sec = b.duration || 0;
+        return [
+          {
+            id: b.id || videoId,
+            title: b.title || 'Unknown Title',
+            url: `https://www.youtube.com/watch?v=${b.id || videoId}`,
+            thumbnail: b.thumbnail?.[0]?.url || '',
+            duration: sec,
+            durationString: formatDuration(sec),
+          },
+        ];
+      } catch (err: any) {
+        logger.warn(`youtubei.js getBasicInfo failed for "${cleanQuery}": ${err.message || err}`);
+      }
+    }
+  }
+
+  // 2. Non-URL search queries: Tier 1 @distube/ytdl-core -> Tier 2 youtubei.js -> Tier 3 youtube-sr -> Tier 4 yt-dlp
+  if (!isUrl) {
+    try {
+      const yt = getYtdl();
+      const results = await yt.search(cleanQuery, { type: SearchType.Video, limit });
+      if (results && results.length > 0) {
+        return results.slice(0, limit).map((v) => ({
+          id: v.id,
+          title: v.title || 'Unknown Title',
+          url: v.url || `https://www.youtube.com/watch?v=${v.id}`,
+          thumbnail: v.thumbnails?.[0]?.url || '',
+          duration: v.lengthSeconds || 0,
+          durationString: formatDuration(v.lengthSeconds || 0),
+        }));
+      }
+    } catch (err: any) {
+      logger.warn(`ytdl-core search failed for "${cleanQuery}": ${err.message || err}`);
+    }
+
+    try {
+      const innertube = await getInnertube();
+      const search = await innertube.search(cleanQuery, { type: 'video' });
+      const videos = (search.results || [])
+        .filter((v: any) => v.id && v.type === 'Video')
+        .slice(0, limit)
+        .map((v: any) => {
+          const sec = v.duration?.seconds || 0;
+          return {
+            id: v.id,
+            title: v.title?.text || v.title?.toString() || 'Unknown Title',
+            url: `https://www.youtube.com/watch?v=${v.id}`,
+            thumbnail: v.thumbnails?.[0]?.url || '',
+            duration: sec,
+            durationString: v.duration?.text || formatDuration(sec),
+          };
+        });
+      if (videos.length > 0) return videos;
+    } catch (err: any) {
+      logger.warn(`youtubei.js search failed for "${cleanQuery}": ${err.message || err}`);
+    }
+
+    try {
+      const srResults = await YouTube.search(cleanQuery, { limit, type: 'video' });
+      if (srResults && srResults.length > 0) {
+        return srResults.map((v) => ({
+          id: v.id || '',
+          title: v.title || 'Unknown Title',
+          url: v.url,
+          thumbnail: v.thumbnail?.url || '',
+          duration: (v.duration || 0) / 1000,
+          durationString: v.durationFormatted || formatDuration((v.duration || 0) / 1000),
+        }));
+      }
+    } catch (err: any) {
+      logger.warn(`youtube-sr search failed for "${cleanQuery}": ${err.message || err}`);
+    }
+  }
+
+  // 3. Modernized yt-dlp fallback (also handles non-YouTube URLs like SoundCloud / Bandcamp)
+  try {
+    const baseArgs = isUrl
+      ? [cleanQuery, '--flat-playlist', '--dump-json', '--no-warnings']
+      : [`ytsearch${limit}:${cleanQuery}`, '--flat-playlist', '--dump-json', '--no-warnings'];
+
+    const args = buildYtDlpArgs(baseArgs, false);
     const output = await runYtDlp(args);
-    
+
     if (output) {
       const lines = output.trim().split('\n');
       const results: YouTubeSearchResult[] = [];
-      
+
       for (const line of lines) {
         if (!line.trim()) continue;
         try {
@@ -174,68 +448,62 @@ export async function searchYouTube(query: string, limit: number = 5): Promise<Y
           if (item._type === 'playlist' || item._type === 'url') {
             if (item.url && (item.url.includes('channel/') || item.url.includes('@'))) continue;
           }
-          
+
           const id = item.id || '';
           results.push({
             id,
             title: item.title || item.fulltitle || 'Unknown Title',
-            url: item.webpage_url || item.url || (id ? `https://www.youtube.com/watch?v=${id}` : (isUrl ? query : '')),
+            url: item.webpage_url || item.url || (id ? `https://www.youtube.com/watch?v=${id}` : isUrl ? cleanQuery : ''),
             thumbnail: item.thumbnails?.[0]?.url || item.thumbnail || '',
             duration: item.duration || 0,
-            durationString: item.duration_string || formatDuration(item.duration || 0)
+            durationString: item.duration_string || formatDuration(item.duration || 0),
           });
-        } catch { }
+        } catch {
+          // ignore malformed JSON line
+        }
       }
-      
+
       if (results.length > 0) return results.slice(0, limit);
     }
   } catch (err: any) {
-    logger.warn(`searchYouTube via yt-dlp failed for query "${query}":`, err.message || err);
-  }
-
-  // Fallback to youtube-sr for search only
-  if (!isUrl) {
-    try {
-      const srResults = await YouTube.search(query, { limit, type: 'video' });
-      if (srResults && srResults.length > 0) {
-        return srResults.map(v => ({
-          id: v.id || '',
-          title: v.title || 'Unknown Title',
-          url: v.url,
-          thumbnail: v.thumbnail?.url || '',
-          duration: v.duration / 1000,
-          durationString: v.durationFormatted || formatDuration(v.duration / 1000)
-        }));
-      }
-    } catch (err: any) {
-      logger.warn(`youtube-sr search failed: ${err.message || err}`);
-    }
+    logger.warn(`yt-dlp search/metadata failed for "${cleanQuery}": ${err.message || err}`);
   }
 
   return [];
 }
 
 export async function ytDlpGetMetadata(url: string): Promise<YouTubeSearchResult[]> {
-  return searchYouTube(url, 50); // Reuse searchYouTube with high limit for playlists
+  return searchYouTube(url, 50);
 }
 
-export async function spawnYtDlpStream(url: string): Promise<Readable> {
+async function spawnYtDlpProcess(url: string, useCookies = false): Promise<{ stream: Readable; cleanup: () => void }> {
   const binaryPath = await ensureYtDlp();
-  const baseArgs = [
-    '--extract-audio',
-    '--audio-format', 'opus',
-    '--audio-quality', '0',
-    '--buffer-size', '64K',
-    '--no-playlist',
-    '-o', '-',
-    url
-  ];
+  const isScSearch = url.startsWith('scsearch');
 
-  const args = buildYtDlpArgs(baseArgs);
+  const baseArgs = isScSearch
+    ? [
+        '-f', 'bestaudio[format_id!*=preview]',
+        '--ignore-errors',
+        '--max-downloads', '1',
+        '--no-part',
+        '--no-warnings',
+        '-o', '-',
+        url,
+      ]
+    : [
+        '-f', 'bestaudio[acodec=opus]/bestaudio/best',
+        '--no-playlist',
+        '--no-part',
+        '--no-warnings',
+        '-o', '-',
+        url,
+      ];
 
-  logger.info(`Spawning high-quality yt-dlp opus stream: "${url}"`);
+  const args = buildYtDlpArgs(baseArgs, useCookies);
+
+  logger.info(`Spawning yt-dlp audio stream (${useCookies ? 'with cookies' : 'cookie-free'}): "${url}"`);
   const child = spawn(binaryPath, args, {
-    stdio: ['ignore', 'pipe', 'pipe']
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
 
   child.stderr.on('data', (data) => {
@@ -250,19 +518,126 @@ export async function spawnYtDlpStream(url: string): Promise<Readable> {
   });
 
   child.on('exit', (code, signal) => {
-    if (code !== 0 && code !== null) {
+    if (code !== 0 && code !== 101 && code !== null) {
       logger.warn(`yt-dlp stream process exited with code ${code}, signal: ${signal}`);
-    } else {
-      logger.info(`yt-dlp stream process completed successfully.`);
     }
   });
 
-  return child.stdout;
+  const cleanup = () => {
+    try {
+      if (!child.killed) child.kill('SIGKILL');
+    } catch {
+      // ignore
+    }
+  };
+
+  child.stdout.on('close', cleanup);
+
+  return { stream: child.stdout, cleanup };
 }
 
-export async function spawnStream(url: string): Promise<Readable> {
-  // Use only yt-dlp as requested
-  return spawnYtDlpStream(url);
+export async function spawnYtDlpStream(url: string, useCookies = false): Promise<Readable> {
+  const { stream, cleanup } = await spawnYtDlpProcess(url, useCookies);
+  return verifyStreamStarts(stream, 20000, cleanup);
+}
+
+async function streamViaYtdlCore(url: string): Promise<Readable> {
+  const yt = getYtdl();
+  const info = await yt.getInfo(url);
+  const format = chooseFormat(info.formats, {
+    quality: Quality.HighestAudio,
+    filter: [
+      { hasAudio: true, hasVideo: false, audioCodec: 'opus' },
+      { hasAudio: true, hasVideo: false },
+      { hasAudio: true },
+    ],
+  });
+  logger.info(`Streaming via @distube/ytdl-core (client=${info.client}, itag=${format.itag}, codec=${format.audioCodec || format.codecs}, sabr=${!!info.sabr})`);
+  const raw = yt.download(info, {
+    format,
+    highWaterMark: 1 << 20,
+  });
+  return verifyStreamStarts(raw, 15000);
+}
+
+async function streamViaInnertube(videoId: string): Promise<Readable> {
+  const innertube = await getInnertube();
+  const clients: Array<'IOS' | 'WEB_EMBEDDED' | 'ANDROID_VR'> = ['IOS', 'WEB_EMBEDDED', 'ANDROID_VR'];
+
+  let lastErr: any;
+  for (const client of clients) {
+    try {
+      logger.info(`Attempting youtubei.js audio stream with client=${client} for ${videoId}`);
+      const webStream = await innertube.download(videoId, {
+        type: 'audio',
+        quality: 'best',
+        client,
+      });
+      const raw = Readable.fromWeb(webStream as any);
+      return await verifyStreamStarts(raw, 15000);
+    } catch (err: any) {
+      lastErr = err;
+      logger.warn(`youtubei.js client=${client} failed for ${videoId}: ${err.message || err}`);
+    }
+  }
+  throw lastErr || new Error('All youtubei.js clients failed');
+}
+
+/**
+ * Resilient multi-engine audio stream resolver (cookie-free by default):
+ * 1. @distube/ytdl-core v5 (built-in BotGuard PO token worker + SABR + client rotation)
+ * 2. youtubei.js v18 (IOS / WEB_EMBEDDED / ANDROID_VR)
+ * 3. Modernized yt-dlp (Node JS runtime + EJS GitHub solver, cookie-free)
+ * 4. SoundCloud fallback via yt-dlp (if YouTube datacenter IP is hard-blocked)
+ */
+export async function spawnStream(url: string, fallbackTitle?: string): Promise<Readable> {
+  const ytUrl = isYouTubeUrl(url);
+
+  if (ytUrl) {
+    const videoId = parseVideoId(url);
+
+    // Tier 1: @distube/ytdl-core v5 (Primary, cookie-free)
+    try {
+      return await streamViaYtdlCore(url);
+    } catch (err: any) {
+      logger.warn(`Tier 1 (@distube/ytdl-core) failed for "${url}": ${err.message || err}`);
+    }
+
+    // Tier 2: youtubei.js v18 (Secondary, cookie-free)
+    if (videoId) {
+      try {
+        return await streamViaInnertube(videoId);
+      } catch (err: any) {
+        logger.warn(`Tier 2 (youtubei.js) failed for "${url}": ${err.message || err}`);
+      }
+    }
+
+    // Tier 3: Modernized yt-dlp (Tertiary, cookie-free)
+    try {
+      return await spawnYtDlpStream(url, false);
+    } catch (err: any) {
+      logger.warn(`Tier 3 (yt-dlp cookie-free) failed for "${url}": ${err.message || err}`);
+    }
+
+    // Tier 4: SoundCloud fallback (rescues playback when datacenter IP is hard-blocked by YouTube)
+    const resolvedTitle = fallbackTitle || (await resolveYouTubeTitleOEmbed(url));
+    if (resolvedTitle) {
+      const scQuery = cleanTitleForSearch(resolvedTitle);
+      if (scQuery) {
+        try {
+          logger.info(`Tier 4 (SoundCloud fallback) searching: "${scQuery}"`);
+          return await spawnYtDlpStream(`scsearch5:${scQuery}`, false);
+        } catch (scErr: any) {
+          logger.warn(`Tier 4 (SoundCloud fallback) failed for "${scQuery}": ${scErr.message || scErr}`);
+        }
+      }
+    }
+
+    throw new Error('Không thể phát luồng âm thanh từ YouTube hoặc nguồn dự phòng cho bài hát này.');
+  }
+
+  // Non-YouTube URLs (SoundCloud, Bandcamp, direct audio links, etc.)
+  return spawnYtDlpStream(url, false);
 }
 
 export const YouTubeSearch = {
@@ -276,22 +651,40 @@ export const YouTubeSearch = {
     });
   },
 
+  async getSuggestions(query: string): Promise<string[]> {
+    try {
+      const yt = getYtdl();
+      const suggestions = await yt.getSuggestions(query);
+      if (suggestions && suggestions.length > 0) {
+        return [...suggestions];
+      }
+    } catch {
+      // fallback to youtube-sr
+    }
+    try {
+      const sr = await YouTube.getSuggestions(query);
+      return sr.map((item: any) => (typeof item === 'string' ? item : item.title || '')).filter(Boolean);
+    } catch {
+      return [];
+    }
+  },
+
   async search(query: string, options?: { limit?: number }) {
     const limit = options?.limit || 5;
     const results = await searchYouTube(query, limit);
-    return results.map(r => ({
+    return results.map((r) => ({
       title: r.title,
       url: r.url,
       thumbnail: { url: r.thumbnail },
-      duration: r.duration * 1000, // standard conversion to ms
-      durationFormatted: r.durationString
+      duration: r.duration * 1000,
+      durationFormatted: r.durationString,
     }));
   },
-  
+
   async searchOne(query: string) {
     const results = await this.search(query, { limit: 1 });
     return results.length > 0 ? results[0] : null;
   },
 
-  spawnStream
+  spawnStream,
 };

@@ -60,12 +60,24 @@ export default function App() {
   const [uploadingCookie, setUploadingCookie] = useState(false);
   const [updatingYtDlp, setUpdatingYtDlp] = useState(false);
 
+  const parseJsonSafe = async (res: Response) => {
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      return null;
+    }
+    try {
+      return await res.json();
+    } catch {
+      return null;
+    }
+  };
+
   // Fetch cookie info
   const fetchCookieInfo = async () => {
     try {
       const res = await fetch('/api/settings/cookies');
-      const data = await res.json();
-      setCookieInfo(data);
+      const data = res.ok ? await parseJsonSafe(res) : null;
+      if (data) setCookieInfo(data);
     } catch (err) {
       console.error('Failed to fetch cookie info:', err);
     }
@@ -74,8 +86,9 @@ export default function App() {
   const fetchYtDlpVersion = async () => {
     try {
       const res = await fetch('/api/settings/ytdlp-version');
-      const data = await res.json();
-      setYtDlpVersion(data.version);
+      const data = res.ok ? await parseJsonSafe(res) : null;
+      if (data?.version) setYtDlpVersion(data.version);
+      else setYtDlpVersion('Không rõ');
     } catch (err) {
       setYtDlpVersion('Lỗi');
     }
@@ -99,12 +112,12 @@ export default function App() {
         method: 'POST',
         body: formData,
       });
-      const data = await res.json();
-      if (data.success) {
+      const data = await parseJsonSafe(res);
+      if (data?.success) {
         triggerAlert('success', data.message);
         fetchCookieInfo();
       } else {
-        triggerAlert('error', 'Lỗi: ' + data.message);
+        triggerAlert('error', 'Lỗi: ' + (data?.message || 'Phản hồi không hợp lệ từ server'));
       }
     } catch (err) {
       triggerAlert('error', 'Lỗi khi tải file lên.');
@@ -133,13 +146,13 @@ export default function App() {
         }),
       });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
+      const data = await parseJsonSafe(res);
+      if (res.ok && data?.success) {
         triggerAlert('success', data.message);
         setSearchQuery('');
         fetchData();
       } else {
-        triggerAlert('error', data.message || 'Lỗi phát nhạc.');
+        triggerAlert('error', data?.message || 'Lỗi phát nhạc.');
       }
     } catch (err: any) {
       triggerAlert('error', `Lỗi kết nối: ${err.message}`);
@@ -158,17 +171,22 @@ export default function App() {
         fetch('/api/guilds')
       ]);
 
-      if (statusRes.ok) setStatus(await statusRes.json());
-      else console.error('statusRes not ok', statusRes.status);
-      if (queuesRes.ok) setQueues(await queuesRes.json());
-      else console.error('queuesRes not ok', queuesRes.status);
-      if (configRes.ok) {
-        const conf = await configRes.json();
-        setConfig(conf);
+      if (statusRes.ok) {
+        const statusData = await parseJsonSafe(statusRes);
+        if (statusData) setStatus(statusData);
       }
-      else console.error('configRes not ok', configRes.status);
-      if (guildsRes.ok) setGuilds(await guildsRes.json());
-      else console.error('guildsRes not ok', guildsRes.status);
+      if (queuesRes.ok) {
+        const queuesData = await parseJsonSafe(queuesRes);
+        if (queuesData) setQueues(queuesData);
+      }
+      if (configRes.ok) {
+        const conf = await parseJsonSafe(configRes);
+        if (conf) setConfig(conf);
+      }
+      if (guildsRes.ok) {
+        const guildsData = await parseJsonSafe(guildsRes);
+        if (guildsData) setGuilds(guildsData);
+      }
     } catch (err) {
       console.error('Failed to fetch data from Express backend:', err);
     }

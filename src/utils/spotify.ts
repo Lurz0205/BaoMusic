@@ -43,7 +43,7 @@ export interface SpotifyTrackInfo {
 
 export const SpotifyUtils = {
   isSpotifyUrl(url: string): boolean {
-    return /open\.spotify\.com\/(track|playlist|album)\//.test(url);
+    return /open\.spotify\.com\/(?:intl-[a-zA-Z-]+\/)?(track|playlist|album)\//.test(url);
   },
 
   async getTrackInfo(url: string): Promise<SpotifyTrackInfo | null> {

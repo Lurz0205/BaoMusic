@@ -6,10 +6,10 @@ import {
   EmbedBuilder
 } from 'discord.js';
 import { joinVoiceChannel } from '@discordjs/voice';
-import { YouTube } from 'youtube-sr';
 import { playerManager } from '../music/PlayerManager.js';
 import { Track } from '../music/Track.js';
 import { logger } from '../utils/logger.js';
+import { YouTubeSearch } from '../utils/youtube-search.js';
 
 export const playCommand = {
   data: new SlashCommandBuilder()
@@ -39,11 +39,10 @@ export const playCommand = {
 
     try {
       const timeoutPromise = new Promise<string[]>((resolve) => setTimeout(() => resolve([]), 1500));
-      const suggestionsPromise = YouTube.getSuggestions(focusedValue);
+      const suggestionsPromise = YouTubeSearch.getSuggestions(focusedValue);
       const suggestions = await Promise.race([suggestionsPromise, timeoutPromise]);
 
-      const choices = suggestions.slice(0, 25).map((query) => {
-        const title = typeof query === 'string' ? query : (query.title || 'Unknown');
+      const choices = suggestions.slice(0, 25).map((title) => {
         const formattedTitle = title.length > 95 ? title.slice(0, 92) + '...' : title;
         return {
           name: formattedTitle,

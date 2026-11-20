@@ -10,9 +10,15 @@ import { logger } from './src/utils/logger.js';
 import { ensureYtDlp, YouTubeSearch } from './src/utils/youtube-search.js';
 
 import multer from 'multer';
+import ffmpegStatic from 'ffmpeg-static';
 
 // Load environment files
 dotenv.config();
+
+// Ensure @discordjs/voice / prism-media can always locate ffmpeg even on minimal containers (e.g. Render)
+if (!process.env.FFMPEG_PATH && ffmpegStatic) {
+  process.env.FFMPEG_PATH = ffmpegStatic;
+}
 
 // Set up multer for cookie file uploads
 const upload = multer({ dest: 'uploads/' });
@@ -292,21 +298,6 @@ PORT=${config.port}
     }
   });
 
-  // --- Vite Middleware / Static Files ---
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
-  }
-
   app.post('/api/settings/update-ytdlp', async (req, res) => {
     try {
       logger.info('Manual yt-dlp update requested from dashboard');
@@ -327,6 +318,26 @@ PORT=${config.port}
       res.status(500).json({ version: 'Unknown' });
     }
   });
+
+  // Ensure unmatched /api/* routes always return JSON instead of falling through to SPA HTML
+  app.use('/api', (req, res) => {
+    res.status(404).json({ success: false, message: `API endpoint not found: ${req.originalUrl}` });
+  });
+
+  // --- Vite Middleware / Static Files ---
+  if (process.env.NODE_ENV !== 'production') {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
 
   // --- Start Server ---
   app.listen(PORT, '0.0.0.0', () => {

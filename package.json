@@ -12,14 +12,18 @@
   },
   "dependencies": {
     "@discordjs/voice": "^0.19.2",
+    "@distube/ytdl-core": "^5.2.1",
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
+    "@types/jsdom": "^30.0.0",
     "@types/multer": "^2.2.0",
     "@vitejs/plugin-react": "^5.0.4",
+    "bgutils-js": "^4.0.3",
     "discord.js": "^14.26.4",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "ffmpeg-static": "^5.3.0",
+    "jsdom": "^31.0.1",
     "libsodium-wrappers": "^0.8.4",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
@@ -29,7 +33,8 @@
     "react-dom": "^19.0.1",
     "spotify-web-api-node": "^5.0.2",
     "vite": "^6.2.3",
-    "youtube-sr": "^4.3.12"
+    "youtube-sr": "^4.3.12",
+    "youtubei.js": "^18.3.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
